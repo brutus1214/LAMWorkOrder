@@ -1,0 +1,99 @@
+@namespace LAMWorkOrder.App.Components
+@inject WorkOrderApiClient WorkOrderApi
+
+<main class="native-shell">
+  <header class="topbar">
+    <div>
+      <p>LAMWorkOrder</p>
+      <h1>Work Orders</h1>
+    </div>
+    <button type="button" @onclick="LoadAsync" disabled="@_isLoading">Refresh</button>
+  </header>
+
+  @if (_isLoading)
+  {
+    <section class="state">Loading queue...</section>
+  }
+  else if (!string.IsNullOrWhiteSpace(_error))
+  {
+    <section class="state error">
+      <strong>API unavailable</strong>
+      <span>@_error</span>
+    </section>
+  }
+  else
+  {
+    <section class="summary-strip">
+      <span><strong>@_workOrders.Count</strong> total</span>
+      <span><strong>@_workOrders.Count(IsUrgent)</strong> urgent</span>
+      <span><strong>@_workOrders.Count(IsInProgress)</strong> in progress</span>
+    </section>
+
+    <section class="work-list">
+      @foreach (var workOrder in _workOrders)
+      {
+        <article class="work-item">
+          <div>
+            <strong>@workOrder.WorkOrderNumber</strong>
+            <h2>@workOrder.Title</h2>
+            <p>@workOrder.Location</p>
+          </div>
+          <div class="meta">
+            <span class="@PriorityClass(workOrder.Priority)">@workOrder.Priority</span>
+            <span>@workOrder.Status</span>
+          </div>
+        </article>
+      }
+    </section>
+  }
+</main>
+
+@code {
+    private IReadOnlyList<WorkOrderSummary> _workOrders = Array.Empty<WorkOrderSummary>();
+    private bool _isLoading = true;
+    private string? _error;
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            _workOrders = await WorkOrderApi.ListAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private static bool IsUrgent(WorkOrderSummary workOrder)
+    {
+        return workOrder.Priority is WorkOrderPriority.High or WorkOrderPriority.Emergency;
+    }
+
+    private static bool IsInProgress(WorkOrderSummary workOrder)
+    {
+        return workOrder.Status == WorkOrderStatus.InProgress;
+    }
+
+    private static string PriorityClass(WorkOrderPriority priority)
+    {
+        return priority switch
+        {
+            WorkOrderPriority.Emergency => "priority emergency",
+            WorkOrderPriority.High => "priority high",
+            _ => "priority"
+        };
+    }
+}

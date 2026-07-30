@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  server-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore API
+        run: dotnet restore src/LAMWorkOrder.Api/LAMWorkOrder.Api.csproj
+      - name: Restore Web
+        run: dotnet restore src/LAMWorkOrder.Web/LAMWorkOrder.Web.csproj
+      - name: Build API
+        run: dotnet build src/LAMWorkOrder.Api/LAMWorkOrder.Api.csproj --configuration Release --no-restore
+      - name: Build Web
+        run: dotnet build src/LAMWorkOrder.Web/LAMWorkOrder.Web.csproj --configuration Release --no-restore

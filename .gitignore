@@ -1,0 +1,25 @@
+# Build outputs
+bin/
+obj/
+artifacts/
+TestResults/
+
+# User and IDE state
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and local settings
+*.log
+*.tmp
+*.cache
+*.nupkg
+appsettings.Development.local.json

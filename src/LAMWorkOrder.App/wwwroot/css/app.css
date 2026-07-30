@@ -1,0 +1,144 @@
+:root {
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: #f4f7f6;
+  color: #18231f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f4f7f6;
+}
+
+button {
+  background: #176b52;
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  min-height: 40px;
+  padding: 10px 14px;
+}
+
+button:disabled {
+  opacity: 0.65;
+}
+
+.native-shell {
+  display: grid;
+  gap: 16px;
+  min-height: 100vh;
+  padding: 18px;
+}
+
+.topbar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.topbar p,
+.work-item p {
+  color: #63756d;
+  margin: 0;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.6rem;
+}
+
+h2 {
+  font-size: 1rem;
+  margin-top: 4px;
+}
+
+.summary-strip {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.summary-strip span,
+.state,
+.work-item {
+  background: #fff;
+  border: 1px solid #dce5e1;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.summary-strip strong {
+  display: block;
+  font-size: 1.3rem;
+}
+
+.work-list {
+  display: grid;
+  gap: 12px;
+}
+
+.work-item {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr auto;
+}
+
+.meta {
+  align-items: end;
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.priority {
+  background: #dcecf8;
+  border-radius: 999px;
+  color: #21597a;
+  font-size: 0.8rem;
+  font-weight: 800;
+  padding: 5px 8px;
+}
+
+.priority.high {
+  background: #ffe9bf;
+  color: #7c5200;
+}
+
+.priority.emergency {
+  background: #ffe1dc;
+  color: #9a2d1d;
+}
+
+.state {
+  color: #52655c;
+}
+
+.state.error {
+  border-color: #f2b4a9;
+  color: #9a2d1d;
+  display: grid;
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .summary-strip,
+  .work-item {
+    grid-template-columns: 1fr;
+  }
+
+  .meta {
+    align-items: start;
+    justify-items: start;
+  }
+}

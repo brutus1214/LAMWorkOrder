@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Application
+  x:Class="LAMWorkOrder.App.App"
+  xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+  xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+  <Application.Resources>
+    <ResourceDictionary>
+      <Color x:Key="Primary">#176B52</Color>
+      <Color x:Key="Accent">#2C3F58</Color>
+    </ResourceDictionary>
+  </Application.Resources>
+</Application>

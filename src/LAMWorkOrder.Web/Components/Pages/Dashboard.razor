@@ -1,0 +1,254 @@
+@page "/"
+@inject WorkOrderApiClient WorkOrderApi
+
+<PageTitle>LAMWorkOrder</PageTitle>
+
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">Operations Queue</p>
+    <h1>Work Orders</h1>
+  </div>
+  <button class="button secondary" type="button" @onclick="LoadAsync" disabled="@_isLoading">
+    Refresh
+  </button>
+</section>
+
+<section class="toolbar" aria-label="Work order filters">
+  <label>
+    Status
+    <select @bind="_statusFilter">
+      <option value="">All</option>
+      @foreach (var status in Enum.GetValues<WorkOrderStatus>())
+      {
+        <option value="@status">@status</option>
+      }
+    </select>
+  </label>
+
+  <label>
+    Search
+    <input type="search" placeholder="WO number, location, requester" @bind="_search" @bind:event="oninput" />
+  </label>
+
+  <button class="button" type="button" @onclick="LoadAsync">Apply</button>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+  <div class="notice">@_message</div>
+}
+
+@if (_isLoading)
+{
+  <section class="empty-state">
+    <h2>Loading queue</h2>
+    <p>Requesting current work orders from the backend.</p>
+  </section>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+  <section class="empty-state error">
+    <h2>API unavailable</h2>
+    <p>@_error</p>
+  </section>
+}
+else
+{
+  <section class="queue-layout">
+    <div class="queue-panel">
+      <div class="section-title">
+        <h2>Active Queue</h2>
+        <span>@_workOrders.Count work orders</span>
+      </div>
+
+      <div class="work-order-table" role="table" aria-label="Work orders">
+        <div class="table-row table-head" role="row">
+          <span role="columnheader">Number</span>
+          <span role="columnheader">Title</span>
+          <span role="columnheader">Priority</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader">Due</span>
+          <span role="columnheader">Owner</span>
+        </div>
+
+        @foreach (var workOrder in _workOrders)
+        {
+          <div class="table-row" role="row">
+            <strong role="cell">@workOrder.WorkOrderNumber</strong>
+            <span role="cell">
+              @workOrder.Title
+              <small>@workOrder.Location</small>
+            </span>
+            <span role="cell" class="@PriorityClass(workOrder.Priority)">@workOrder.Priority</span>
+            <span role="cell" class="@StatusClass(workOrder.Status)">@workOrder.Status</span>
+            <span role="cell">@FormatDue(workOrder.DueAt)</span>
+            <span role="cell">@(workOrder.AssignedTo ?? "Unassigned")</span>
+          </div>
+        }
+      </div>
+    </div>
+
+    <form class="intake-panel" @onsubmit="CreateAsync" @onsubmit:preventDefault="true">
+      <div class="section-title">
+        <h2>New Work Order</h2>
+        <span>Intake</span>
+      </div>
+
+      <label>
+        Title
+        <input required maxlength="120" @bind="_draft.Title" />
+      </label>
+
+      <label>
+        Description
+        <textarea required maxlength="2000" rows="4" @bind="_draft.Description"></textarea>
+      </label>
+
+      <div class="form-grid">
+        <label>
+          Requested By
+          <input required maxlength="120" @bind="_draft.RequestedBy" />
+        </label>
+
+        <label>
+          Location
+          <input required maxlength="160" @bind="_draft.Location" />
+        </label>
+      </div>
+
+      <div class="form-grid">
+        <label>
+          Priority
+          <select @bind="_draft.Priority">
+            @foreach (var priority in Enum.GetValues<WorkOrderPriority>())
+            {
+              <option value="@priority">@priority</option>
+            }
+          </select>
+        </label>
+
+        <label>
+          Assigned To
+          <input maxlength="120" @bind="_draft.AssignedTo" />
+        </label>
+      </div>
+
+      <button class="button" type="submit" disabled="@_isSubmitting">
+        Create Work Order
+      </button>
+    </form>
+  </section>
+}
+
+@code {
+    private IReadOnlyList<WorkOrderSummary> _workOrders = Array.Empty<WorkOrderSummary>();
+    private CreateWorkOrderFormModel _draft = new();
+    private bool _isLoading = true;
+    private bool _isSubmitting;
+    private string _statusFilter = string.Empty;
+    private string _search = string.Empty;
+    private string? _error;
+    private string? _message;
+
+    protected override Task OnInitializedAsync()
+    {
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            var status = Enum.TryParse<WorkOrderStatus>(_statusFilter, out var parsedStatus)
+                ? parsedStatus
+                : (WorkOrderStatus?)null;
+
+            _workOrders = await WorkOrderApi.ListAsync(status, search: _search);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _isSubmitting = true;
+        _error = null;
+        _message = null;
+
+        try
+        {
+            var request = new CreateWorkOrderRequest(
+                _draft.Title,
+                _draft.Description,
+                _draft.RequestedBy,
+                _draft.Location,
+                _draft.Priority,
+                string.IsNullOrWhiteSpace(_draft.AssignedTo) ? null : _draft.AssignedTo,
+                null);
+
+            var result = await WorkOrderApi.CreateAsync(request);
+            if (!result.IsSuccess)
+            {
+                _error = result.Error;
+                return;
+            }
+
+            _message = $"{result.Value!.WorkOrderNumber} created.";
+            _draft = new CreateWorkOrderFormModel();
+            await LoadAsync();
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private static string FormatDue(DateTimeOffset? dueAt)
+    {
+        return dueAt is null ? "No due date" : dueAt.Value.LocalDateTime.ToString("MMM d, h:mm tt");
+    }
+
+    private static string PriorityClass(WorkOrderPriority priority)
+    {
+        return priority switch
+        {
+            WorkOrderPriority.Emergency => "pill danger",
+            WorkOrderPriority.High => "pill warning",
+            WorkOrderPriority.Normal => "pill normal",
+            _ => "pill muted"
+        };
+    }
+
+    private static string StatusClass(WorkOrderStatus status)
+    {
+        return status switch
+        {
+            WorkOrderStatus.New => "pill info",
+            WorkOrderStatus.InProgress => "pill active",
+            WorkOrderStatus.Blocked => "pill danger",
+            WorkOrderStatus.Completed => "pill done",
+            WorkOrderStatus.Cancelled => "pill muted",
+            _ => "pill normal"
+        };
+    }
+
+    private sealed class CreateWorkOrderFormModel
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string RequestedBy { get; set; } = string.Empty;
+        public string Location { get; set; } = string.Empty;
+        public WorkOrderPriority Priority { get; set; } = WorkOrderPriority.Normal;
+        public string? AssignedTo { get; set; }
+    }
+}

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LAMWorkOrder.Client\LAMWorkOrder.Client.csproj" />
+    <ProjectReference Include="..\LAMWorkOrder.Shared\LAMWorkOrder.Shared.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,46 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LAMWorkOrder.Shared", "src\LAMWorkOrder.Shared\LAMWorkOrder.Shared.csproj", "{2B0BA8FA-9C33-4F56-AE99-09B4E0C45EEE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LAMWorkOrder.Client", "src\LAMWorkOrder.Client\LAMWorkOrder.Client.csproj", "{D4232F89-E599-45A5-B98C-B25728AE91AF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LAMWorkOrder.Api", "src\LAMWorkOrder.Api\LAMWorkOrder.Api.csproj", "{DC495601-ED6E-42A8-B682-D033154E0F22}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LAMWorkOrder.Web", "src\LAMWorkOrder.Web\LAMWorkOrder.Web.csproj", "{96CDA47F-133C-4C81-BFC2-878F48CA1F0B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LAMWorkOrder.App", "src\LAMWorkOrder.App\LAMWorkOrder.App.csproj", "{C0253CB8-04B3-46E4-898C-89B36C6A0106}"
+EndProject
+Global
+  GlobalSection(SolutionConfigurationPlatforms) = preSolution
+    Debug|Any CPU = Debug|Any CPU
+    Release|Any CPU = Release|Any CPU
+  EndGlobalSection
+  GlobalSection(ProjectConfigurationPlatforms) = postSolution
+    {2B0BA8FA-9C33-4F56-AE99-09B4E0C45EEE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {2B0BA8FA-9C33-4F56-AE99-09B4E0C45EEE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {2B0BA8FA-9C33-4F56-AE99-09B4E0C45EEE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {2B0BA8FA-9C33-4F56-AE99-09B4E0C45EEE}.Release|Any CPU.Build.0 = Release|Any CPU
+    {D4232F89-E599-45A5-B98C-B25728AE91AF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {D4232F89-E599-45A5-B98C-B25728AE91AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {D4232F89-E599-45A5-B98C-B25728AE91AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {D4232F89-E599-45A5-B98C-B25728AE91AF}.Release|Any CPU.Build.0 = Release|Any CPU
+    {DC495601-ED6E-42A8-B682-D033154E0F22}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {DC495601-ED6E-42A8-B682-D033154E0F22}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {DC495601-ED6E-42A8-B682-D033154E0F22}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {DC495601-ED6E-42A8-B682-D033154E0F22}.Release|Any CPU.Build.0 = Release|Any CPU
+    {96CDA47F-133C-4C81-BFC2-878F48CA1F0B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {96CDA47F-133C-4C81-BFC2-878F48CA1F0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {96CDA47F-133C-4C81-BFC2-878F48CA1F0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {96CDA47F-133C-4C81-BFC2-878F48CA1F0B}.Release|Any CPU.Build.0 = Release|Any CPU
+    {C0253CB8-04B3-46E4-898C-89B36C6A0106}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {C0253CB8-04B3-46E4-898C-89B36C6A0106}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {C0253CB8-04B3-46E4-898C-89B36C6A0106}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {C0253CB8-04B3-46E4-898C-89B36C6A0106}.Release|Any CPU.Build.0 = Release|Any CPU
+  EndGlobalSection
+  GlobalSection(SolutionProperties) = preSolution
+    HideSolutionNode = FALSE
+  EndGlobalSection
+EndGlobal
