@@ -1,8 +1,0 @@
-{
-  "name": "LAMWorkOrder",
-  "short_name": "LAMWorkOrder",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#f4f7f6",
-  "theme_color": "#176b52"
-}

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#10253f">
+  <title>LAMWorkOrder</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+<header>
+  <div><span class="eyebrow">LAM OPERATIONS</span><h1>Work orders</h1></div>
+  <button id="refresh" class="secondary">Refresh</button>
+</header>
+<main>
+  <section class="metrics" aria-label="Queue summary">
+    <article><span>Total</span><strong id="total">—</strong></article>
+    <article><span>Urgent</span><strong id="urgent">—</strong></article>
+    <article><span>In progress</span><strong id="progress">—</strong></article>
+  </section>
+  <section class="workspace">
+    <div class="queue card">
+      <div class="toolbar">
+        <div><h2>Active queue</h2><p id="message">Connecting to API…</p></div>
+        <input id="search" type="search" placeholder="Search number, title, location">
+        <select id="status"><option value="">All statuses</option></select>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Number</th><th>Work</th><th>Priority</th><th>Status</th><th>Owner</th></tr></thead>
+        <tbody id="orders"></tbody>
+      </table></div>
+    </div>
+    <form id="create-form" class="card">
+      <div><span class="eyebrow">INTAKE</span><h2>New work order</h2></div>
+      <label>Title<input name="title" required maxlength="120"></label>
+      <label>Description<textarea name="description" required maxlength="2000"></textarea></label>
+      <div class="pair">
+        <label>Requested by<input name="requestedBy" required maxlength="120"></label>
+        <label>Location<input name="location" required maxlength="160"></label>
+      </div>
+      <div class="pair">
+        <label>Priority<select name="priority"><option>Normal</option><option>Low</option><option>High</option><option>Emergency</option></select></label>
+        <label>Assigned to<input name="assignedTo" maxlength="120"></label>
+      </div>
+      <button type="submit">Create work order</button>
+    </form>
+  </section>
+</main>
+</body>
+</html>
+

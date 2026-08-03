@@ -1,25 +1,13 @@
-# Build outputs
-bin/
-obj/
-artifacts/
-TestResults/
-
-# User and IDE state
-.vs/
-.vscode/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.db
+*.sqlite3
 .idea/
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Logs and local settings
-*.log
-*.tmp
-*.cache
-*.nupkg
-appsettings.Development.local.json
+.gradle/
+android/local.properties
+android/**/build/
+dist/
+build/
