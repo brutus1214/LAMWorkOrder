@@ -34,7 +34,9 @@ data class CreateWorkOrder(
 )
 
 @Serializable data class Attachment(val id: String, val originalName: String, val contentType: String, val sizeBytes: Long, val createdAt: String, val url: String)
-@Serializable data class User(val id: String, val username: String, val displayName: String, val email: String? = null, val storeNumber: Int = 1, val phoneNumber: String? = null, val role: String)
+@Serializable data class User(val id: String, val username: String, val displayName: String, val email: String? = null, val storeNumber: Int = 1, val phoneNumber: String? = null, val role: String, val isActive: Boolean = true)
+@Serializable data class UserAdminUpdate(val displayName: String, val storeNumber: Int, val role: String, val email: String? = null, val phoneNumber: String? = null, val isActive: Boolean)
+@Serializable data class PasswordReset(val newPassword: String)
 @Serializable data class LoginRequest(val username: String, val password: String)
 @Serializable data class RegistrationRequest(val username: String, val password: String, val displayName: String, val storeNumber: Int, val email: String, val phoneNumber: String)
 @Serializable data class LoginResponse(val token: String, val user: User)

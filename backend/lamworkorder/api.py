@@ -16,12 +16,14 @@ from .schemas import (
     Health,
     LoginRequest,
     LoginResponse,
+    PasswordReset,
     Priority,
     ProfileUpdate,
     RegistrationRequest,
     Status,
     StatusUpdate,
     UserRead,
+    UserAdminUpdate,
     WorkOrderCreate,
     WorkOrderRead,
     WorkOrderUpdate,
@@ -75,14 +77,15 @@ def register(request: RegistrationRequest, session: Session = Depends(get_sessio
         raise HTTPException(status_code=409, detail="Username is already in use")
     if session.scalar(select(User.id).where(User.email == email)):
         raise HTTPException(status_code=409, detail="Email is already in use")
+    is_jc_administrator = username == "jc"
     user = User(
         username=username,
         password_hash=hash_password(request.password),
         display_name=request.display_name.strip(),
-        store_number=request.store_number,
+        store_number=99 if is_jc_administrator else request.store_number,
         email=email,
         phone_number=request.phone_number.strip(),
-        role="Requester",
+        role="Admin" if is_jc_administrator else "Requester",
     )
     session.add(user)
     session.commit()
@@ -111,6 +114,62 @@ def update_profile(
     user.email = request.email.strip() if request.email else None
     session.commit()
     return user
+
+
+def _managed_user(user_id: UUID, actor: User, session: Session) -> User:
+    target = session.get(User, str(user_id))
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if actor.role == "Manager" and (actor.store_number == 99 or target.store_number != actor.store_number):
+        raise HTTPException(status_code=403, detail="Managers can only manage users in their store")
+    return target
+
+
+@router.get("/api/users", response_model=list[UserRead], tags=["user management"])
+def list_users(
+    actor: User = Depends(require_roles("Admin", "Manager")),
+    session: Session = Depends(get_session),
+):
+    statement = select(User).order_by(User.display_name)
+    if actor.role == "Manager":
+        statement = statement.where(User.store_number == actor.store_number)
+    return list(session.scalars(statement))
+
+
+@router.patch("/api/users/{user_id}", response_model=UserRead, tags=["user management"])
+def update_user(
+    user_id: UUID,
+    request: UserAdminUpdate,
+    actor: User = Depends(require_roles("Admin", "Manager")),
+    session: Session = Depends(get_session),
+):
+    target = _managed_user(user_id, actor, session)
+    if actor.role == "Manager" and (request.role in {"Admin", "Manager"} or request.store_number == 99):
+        raise HTTPException(status_code=403, detail="Only an Administrator can assign this role or All Stores")
+    if target.id == actor.id and (not request.is_active or request.role != actor.role):
+        raise HTTPException(status_code=400, detail="You cannot deactivate or demote your own account")
+    target.display_name = request.display_name.strip()
+    target.store_number = request.store_number
+    target.role = request.role.value
+    target.email = request.email.strip().lower() if request.email else None
+    target.phone_number = request.phone_number.strip() if request.phone_number else None
+    target.is_active = request.is_active
+    session.commit()
+    session.refresh(target)
+    return target
+
+
+@router.post("/api/users/{user_id}/reset-password", status_code=204, tags=["user management"])
+def reset_user_password(
+    user_id: UUID,
+    request: PasswordReset,
+    actor: User = Depends(require_roles("Admin", "Manager")),
+    session: Session = Depends(get_session),
+):
+    target = _managed_user(user_id, actor, session)
+    target.password_hash = hash_password(request.new_password)
+    session.execute(delete(SessionToken).where(SessionToken.user_id == target.id))
+    session.commit()
 
 
 @router.get("/api/work-orders", response_model=list[WorkOrderRead], tags=["work orders"])

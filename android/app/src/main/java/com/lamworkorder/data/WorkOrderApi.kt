@@ -22,6 +22,9 @@ interface WorkOrderApi {
     @POST("api/auth/register") suspend fun register(@Body request: RegistrationRequest): LoginResponse
     @GET("api/profile") suspend fun profile(@Header("Authorization") auth: String): User
     @PATCH("api/profile") suspend fun updateProfile(@Header("Authorization") auth: String, @Body request: ProfileUpdate): User
+    @GET("api/users") suspend fun users(@Header("Authorization") auth: String): List<User>
+    @PATCH("api/users/{id}") suspend fun updateUser(@Header("Authorization") auth: String, @Path("id") id: String, @Body request: UserAdminUpdate): User
+    @POST("api/users/{id}/reset-password") suspend fun resetPassword(@Header("Authorization") auth: String, @Path("id") id: String, @Body request: PasswordReset)
 
     @GET("api/work-orders")
     suspend fun list(

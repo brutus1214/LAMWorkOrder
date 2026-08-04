@@ -55,9 +55,11 @@ class MainActivity : ComponentActivity() {
     if (state.user == null) { Login(model, state); return }
     var selected by remember { mutableStateOf<WorkOrder?>(null) }
     var profile by remember { mutableStateOf(false) }
+    var manageUsers by remember { mutableStateOf(false) }
     if (profile) { Profile(model, state.user!!, { profile = false }); return }
+    if (manageUsers) { ManageUsers(model, state, { manageUsers = false }); return }
     selected?.let { Detail(model, it, state.user!!, { selected = null }); return }
-    Queue(model, state, { selected = it }, { profile = true })
+    Queue(model, state, { selected = it }, { profile = true }, { manageUsers = true; model.loadUsers() })
 }
 
 @Composable private fun Login(model: WorkOrderViewModel, state: QueueState) {
@@ -290,15 +292,62 @@ private fun formatUsPhone(input: String): String {
     }
 }
 
-@Composable private fun Queue(model: WorkOrderViewModel, state: QueueState, select:(WorkOrder)->Unit, showProfile:()->Unit) {
+@Composable private fun Queue(model: WorkOrderViewModel, state: QueueState, select:(WorkOrder)->Unit, showProfile:()->Unit, showUsers:()->Unit) {
     var search by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().background(Color(0xFFF0F4F7)).padding(16.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
         BrandLogo(Modifier.fillMaxWidth().height(54.dp))
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Column{Text("Work orders",style=MaterialTheme.typography.headlineLarge);Text("${state.user!!.displayName} · ${state.user.role}")};TextButton(showProfile){Text("Profile")};TextButton(model::logout){Text("Logout")}}
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Column{Text("Work orders",style=MaterialTheme.typography.headlineLarge);Text("${state.user!!.displayName} · ${if(state.user.role=="Admin") "Administrator" else state.user.role}")};Column{if(state.user.role in listOf("Admin","Manager")) TextButton(showUsers){Text("Manage Users")};TextButton(showProfile){Text("Profile")};TextButton(model::logout){Text("Logout")}}}
         Row{OutlinedTextField(search,{search=it},label={Text("Search")},modifier=Modifier.weight(1f));Button({model.refresh(search)}){Text("Go")}}
         if(state.loading) LinearProgressIndicator(Modifier.fillMaxWidth()); state.error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)){items(state.orders,key={it.id}){o->Card(Modifier.fillMaxWidth().clickable{select(o)}){Column(Modifier.padding(14.dp)){Text(o.workOrderNumber,fontWeight=FontWeight.Bold);Text(o.title,style=MaterialTheme.typography.titleMedium);Text("Store ${o.storeNumber} · ${o.location} · ${o.status}")}}}}
         Intake(model)
+    }
+}
+
+@Composable private fun ManageUsers(model: WorkOrderViewModel, state: QueueState, back: () -> Unit) {
+    var selected by remember { mutableStateOf<User?>(null) }
+    selected?.let { EditUser(model, it, state.user!!, { selected = null }) ; return }
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Manage Users", style = MaterialTheme.typography.headlineLarge)
+            TextButton(back) { Text("Back") }
+        }
+        Text(if (state.user?.role == "Admin") "All stores" else "LA Mart ${state.user?.storeNumber}")
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(state.users, key = { it.id }) { user ->
+                Card(Modifier.fillMaxWidth().clickable { selected = user }) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text(user.displayName, fontWeight = FontWeight.Bold)
+                        Text("${user.username} · ${if(user.role=="Admin") "Administrator" else user.role}")
+                        Text("${if(user.storeNumber==99) "All Stores" else "LA Mart ${user.storeNumber}"} · ${if(user.isActive) "Active" else "Inactive"}")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun EditUser(model: WorkOrderViewModel, user: User, actor: User, back: () -> Unit) {
+    var name by remember { mutableStateOf(user.displayName) }; var store by remember { mutableIntStateOf(user.storeNumber) }
+    var role by remember { mutableStateOf(user.role) }; var email by remember { mutableStateOf(user.email.orEmpty()) }
+    var phone by remember { mutableStateOf(TextFieldValue(user.phoneNumber.orEmpty())) }; var active by remember { mutableStateOf(user.isActive) }
+    var password by remember { mutableStateOf("") }; var roleOpen by remember { mutableStateOf(false) }
+    val roles = if(actor.role=="Admin") listOf("Requester","Technician","Manager","Admin") else listOf("Requester","Technician")
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Edit User", style = MaterialTheme.typography.headlineLarge); Text("@${user.username}")
+        OutlinedTextField(name,{name=it},label={Text("Full name")},modifier=Modifier.fillMaxWidth())
+        StoreDropdown(store,{store=it},Modifier.fillMaxWidth())
+        Box { OutlinedButton({roleOpen=true}){Text("Role: ${if(role=="Admin") "Administrator" else role}")}; DropdownMenu(roleOpen,{roleOpen=false}){roles.forEach{r->DropdownMenuItem({Text(if(r=="Admin") "Administrator" else r)},{role=r;roleOpen=false})}} }
+        OutlinedTextField(email,{email=it.trim()},label={Text("Email")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Email),modifier=Modifier.fillMaxWidth())
+        OutlinedTextField(phone,{incoming->val formatted=formatUsPhone(incoming.text);phone=TextFieldValue(formatted,selection=TextRange(formatted.length))},label={Text("Phone number for texting")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Phone),modifier=Modifier.fillMaxWidth())
+        Row { Switch(active,{active=it}); Spacer(Modifier.width(8.dp)); Text(if(active) "Active — can sign in" else "Inactive — sign-in blocked") }
+        Button({model.updateUser(user.id,UserAdminUpdate(name.trim(),store,role,email.ifBlank{null},phone.text.ifBlank{null},active),back)},enabled=name.isNotBlank()){Text("Save user")}
+        HorizontalDivider(); Text("Reset password",style=MaterialTheme.typography.titleMedium)
+        OutlinedTextField(password,{password=it},label={Text("Temporary password (8+ characters)")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
+        OutlinedButton({model.resetPassword(user.id,password){password=""}},enabled=password.length>=8){Text("Reset password")}
+        TextButton(back){Text("Cancel")}
     }
 }
 

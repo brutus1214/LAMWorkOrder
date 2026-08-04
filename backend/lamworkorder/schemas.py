@@ -95,6 +95,20 @@ class UserRead(ApiModel):
     store_number: int = 1
     phone_number: str | None = None
     role: Role
+    is_active: bool = True
+
+
+class UserAdminUpdate(ApiModel):
+    display_name: str = Field(min_length=1, max_length=120)
+    store_number: int = Field(ge=1, le=99)
+    role: Role
+    email: str | None = Field(default=None, max_length=254)
+    phone_number: str | None = Field(default=None, max_length=30)
+    is_active: bool = True
+
+
+class PasswordReset(ApiModel):
+    new_password: str = Field(min_length=8, max_length=200)
 
 
 class LoginResponse(ApiModel):

@@ -11,7 +11,7 @@ import okhttp3.MultipartBody
 
 data class QueueState(
     val orders: List<WorkOrder> = emptyList(), val user: User? = null,
-    val loading: Boolean = false, val error: String? = null,
+    val users: List<User> = emptyList(), val loading: Boolean = false, val error: String? = null,
 )
 
 class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) : ViewModel() {
@@ -51,6 +51,25 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
     fun updateProfile(name: String, email: String?, done: () -> Unit) = viewModelScope.launch {
         runCatching { api.updateProfile(auth(), ProfileUpdate(name, email?.takeIf(String::isNotBlank))) }
             .onSuccess { _state.value = _state.value.copy(user = it, error = null); done() }
+            .onFailure { _state.value = _state.value.copy(error = it.message) }
+    }
+
+    fun loadUsers() = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { api.users(auth()) }
+            .onSuccess { _state.value = _state.value.copy(users = it, loading = false) }
+            .onFailure { _state.value = _state.value.copy(loading = false, error = it.message) }
+    }
+
+    fun updateUser(id: String, request: UserAdminUpdate, done: () -> Unit) = viewModelScope.launch {
+        runCatching { api.updateUser(auth(), id, request) }
+            .onSuccess { loadUsers(); done() }
+            .onFailure { _state.value = _state.value.copy(error = it.message) }
+    }
+
+    fun resetPassword(id: String, password: String, done: () -> Unit) = viewModelScope.launch {
+        runCatching { api.resetPassword(auth(), id, PasswordReset(password)) }
+            .onSuccess { done() }
             .onFailure { _state.value = _state.value.copy(error = it.message) }
     }
 

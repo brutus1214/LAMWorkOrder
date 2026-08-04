@@ -17,6 +17,23 @@ def test_health(client):
     assert response.json()["status"] == "ok"
 
 
+def test_jc_registration_is_all_store_administrator(client):
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "username": "jc",
+            "password": "secure-password",
+            "displayName": "James Chang",
+            "storeNumber": 1,
+            "email": "jc@example.com",
+            "phoneNumber": "202-555-0100",
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["user"]["role"] == "Admin"
+    assert response.json()["user"]["storeNumber"] == 99
+
+
 def test_login_profile_and_permissions(client):
     assert client.get("/api/profile").json()["role"] == "Admin"
     profile = client.patch(
