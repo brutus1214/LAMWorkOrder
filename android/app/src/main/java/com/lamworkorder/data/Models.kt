@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 data class WorkOrder(
     val id: String,
     val workOrderNumber: String,
+    val storeNumber: Int,
     val title: String,
     val description: String,
     val requestedBy: String,
@@ -21,6 +22,7 @@ data class WorkOrder(
 
 @Serializable
 data class CreateWorkOrder(
+    val storeNumber: Int,
     val title: String,
     val description: String,
     val requestedBy: String,
@@ -28,4 +30,3 @@ data class CreateWorkOrder(
     val priority: String = "Normal",
     val assignedTo: String? = null,
 )
-
