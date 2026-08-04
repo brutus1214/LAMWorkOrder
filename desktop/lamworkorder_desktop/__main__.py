@@ -1,5 +1,7 @@
 import sys
+from importlib.resources import files
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from .window import MainWindow
@@ -7,6 +9,8 @@ from .window import MainWindow
 
 def main() -> None:
     app = QApplication(sys.argv)
+    app.setApplicationName("LA Mart Work Orders")
+    app.setWindowIcon(QIcon(str(files("lamworkorder_desktop").joinpath("assets/app-icon.svg"))))
     app.setStyleSheet("""
         QWidget { font: 10pt 'Segoe UI'; color: #142438; }
         QMainWindow { background: #edf2f6; }
