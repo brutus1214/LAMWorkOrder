@@ -31,6 +31,7 @@ class Status(StrEnum):
 
 
 class WorkOrderCreate(ApiModel):
+    store_number: int = Field(default=1, ge=1, le=9999)
     title: str = Field(min_length=1, max_length=120)
     description: str = Field(min_length=1, max_length=2000)
     requested_by: str = Field(min_length=1, max_length=120)
