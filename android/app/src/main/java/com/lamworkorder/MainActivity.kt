@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -298,13 +299,62 @@ private fun formatUsPhone(input: String): String {
 @Composable private fun Queue(model: WorkOrderViewModel, state: QueueState, select:(WorkOrder)->Unit, showProfile:()->Unit, showUsers:()->Unit) {
     val currentUser = state.user ?: return
     var search by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().background(Color(0xFFF0F4F7)).padding(16.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
+    var filter by remember { mutableStateOf("All") }
+    var menuOpen by remember { mutableStateOf(false) }
+    var intakeOpen by remember { mutableStateOf(false) }
+    if (intakeOpen) { Intake(model, currentUser) { intakeOpen = false }; return }
+    val visibleOrders = remember(state.orders, filter) {
+        state.orders.filter { order -> when (filter) {
+            "New" -> order.status == "New"
+            "Open/In Progress" -> order.status in listOf("Scheduled", "InProgress", "Blocked")
+            "Completed" -> order.status == "Completed"
+            "Closed" -> order.status == "Cancelled"
+            else -> true
+        }}.sortedWith(compareBy<WorkOrder> { when (it.status) {
+            "New" -> 0; "Scheduled" -> 1; "InProgress" -> 2; "Blocked" -> 3
+            "Completed" -> 4; "Cancelled" -> 5; else -> 6
+        }}.thenBy { it.workOrderNumber })
+    }
+    Box(Modifier.fillMaxSize().background(Color(0xFFF0F4F7))) {
+      Column(Modifier.fillMaxSize().padding(16.dp).padding(bottom = 58.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
         BrandLogo(Modifier.fillMaxWidth().height(54.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Column { Text("Work orders", style=MaterialTheme.typography.headlineLarge); Text(currentUser.displayName) }
+            Box {
+                IconButton({ menuOpen = true }) { Text("\u22EE", style = MaterialTheme.typography.headlineMedium) }
+                DropdownMenu(menuOpen, { menuOpen = false }) {
+                    if(currentUser.role in listOf("Admin","Manager")) DropdownMenuItem({ Text("Manage Users") }, { menuOpen=false; showUsers() })
+                    DropdownMenuItem({ Text("Profile") }, { menuOpen=false; showProfile() })
+                    DropdownMenuItem({ Text("Logout") }, { menuOpen=false; model.logout() })
+                }
+            }
+        }
+        /* Previous expanded account actions:
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Column{Text("Work orders",style=MaterialTheme.typography.headlineLarge);Text("${currentUser.displayName} · ${if(currentUser.role=="Admin") "Administrator" else currentUser.role}")};Column{if(currentUser.role in listOf("Admin","Manager")) TextButton(showUsers){Text("Manage Users")};TextButton(showProfile){Text("Profile")};TextButton(model::logout){Text("Logout")}}}
+        */
         Row{OutlinedTextField(search,{search=it},label={Text("Search")},modifier=Modifier.weight(1f));Button({model.refresh(search)}){Text("Go")}}
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("All", "New", "Open/In Progress", "Completed", "Closed").forEach { option ->
+                FilterChip(selected = filter == option, onClick = { filter = option }, label = { Text(option) })
+            }
+        }
         if(state.loading) LinearProgressIndicator(Modifier.fillMaxWidth()); state.error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
+        /* Unfiltered list:
         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)){items(state.orders,key={it.id}){o->Card(Modifier.fillMaxWidth().clickable{select(o)}){Column(Modifier.padding(14.dp)){Text(o.workOrderNumber,fontWeight=FontWeight.Bold);Text(o.title,style=MaterialTheme.typography.titleMedium);Text("Store ${o.storeNumber} · ${o.location} · ${o.status}")}}}}
-        Intake(model, currentUser)
+        */
+        LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            items(visibleOrders,key={it.id}) { order ->
+                Card(Modifier.fillMaxWidth().clickable{select(order)}) { Column(Modifier.padding(14.dp)) {
+                    Text(order.workOrderNumber,fontWeight=FontWeight.Bold)
+                    Text(order.title,style=MaterialTheme.typography.titleMedium)
+                    Text("Store ${order.storeNumber} - ${order.location} - ${if(order.status=="InProgress") "In Progress" else order.status}")
+                }}
+            }
+        }
+      }
+      Button({ intakeOpen = true }, Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth().padding(16.dp)) {
+          Text("New Work Order")
+      }
     }
 }
 
@@ -556,8 +606,7 @@ private fun formatUsPhone(input: String): String {
     }
 }
 
-@Composable private fun Intake(model: WorkOrderViewModel, user: User) {
-    var open by remember { mutableStateOf(false) }
+@Composable private fun Intake(model: WorkOrderViewModel, user: User, close: () -> Unit) {
     var store by remember(user.id) { mutableIntStateOf(user.storeNumber) }
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -579,10 +628,18 @@ private fun formatUsPhone(input: String): String {
         }
     }
 
-    Button({ open = !open }, Modifier.fillMaxWidth()) {
-        Text(if (open) "Close intake" else "New work order")
-    }
-    if (open) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Scaffold(
+        topBar = { Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("New Work Order", style = MaterialTheme.typography.headlineMedium)
+            TextButton(close) { Text("Cancel") }
+        }},
+        bottomBar = { Surface(shadowElevation = 8.dp) { Button({
+            model.create(CreateWorkOrder(store, title, description, user.displayName, location, priority), attachments, close)
+        }, enabled = title.isNotBlank() && description.isNotBlank() && location.isNotBlank(), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Text("Create Work Order")
+        }}},
+    ) { contentPadding ->
+      Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(contentPadding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         StoreDropdown(store, { store = it }, Modifier.fillMaxWidth())
         Field("Title", title, { title = it }, true)
         Field("Description", description, { description = it }, true)
@@ -602,6 +659,7 @@ private fun formatUsPhone(input: String): String {
         ) {
             Text(if (attachments.isEmpty()) "Add pictures or videos" else "${attachments.size} attachment(s) selected")
         }
+        /* Create action moved to the fixed bottom bar.
         Button(
             {
                 model.create(
@@ -615,5 +673,7 @@ private fun formatUsPhone(input: String): String {
             enabled = title.isNotBlank() && description.isNotBlank() && location.isNotBlank(),
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Create") }
+        */
+      }
     }
 }
