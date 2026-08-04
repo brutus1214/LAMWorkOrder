@@ -11,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -40,14 +42,59 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable private fun Login(model: WorkOrderViewModel, state: QueueState) {
-    var username by remember { mutableStateOf("") }; var password by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-        Text("LAM OPERATIONS", color=Color(0xFF0D8278), fontWeight=FontWeight.Bold)
-        Text("Sign in", style=MaterialTheme.typography.headlineLarge)
-        OutlinedTextField(username,{username=it},label={Text("Username")},modifier=Modifier.fillMaxWidth())
-        OutlinedTextField(password,{password=it},label={Text("Password")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
-        state.error?.let { Text(it,color=MaterialTheme.colorScheme.error) }
-        Button({model.login(username,password)}, enabled=!state.loading&&username.isNotBlank()&&password.isNotBlank(), modifier=Modifier.fillMaxWidth()){Text("Sign in")}
+    var createMode by remember { mutableStateOf(false) }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var store by remember { mutableStateOf("1") }
+    var email by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("LAM OPERATIONS", color = Color(0xFF0D8278), fontWeight = FontWeight.Bold)
+        Text(if (createMode) "Create new user" else "Sign in", style = MaterialTheme.typography.headlineLarge)
+        if (createMode) {
+            Text("New accounts start as Requester. A manager can change the role later.")
+            OutlinedTextField(name, { name = it }, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(store, { store = it.filter(Char::isDigit) }, label = { Text("Store number") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(email, { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(phone, { phone = it }, label = { Text("Phone number for texting") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(username, { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(password, { password = it }, label = { Text("Password (8+ characters)") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Button(
+                {
+                    model.register(
+                        RegistrationRequest(
+                            username.trim(), password, name.trim(), store.toInt(),
+                            email.trim(), phone.trim(),
+                        )
+                    )
+                },
+                enabled = !state.loading && name.isNotBlank() && store.toIntOrNull() != null &&
+                    email.isNotBlank() && phone.isNotBlank() && username.length >= 3 && password.length >= 8,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Create user and sign in") }
+            TextButton({ createMode = false }, modifier = Modifier.fillMaxWidth()) {
+                Text("Already have an account? Sign in")
+            }
+        } else {
+            OutlinedTextField(username, { username = it }, label = { Text("Username or email") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(password, { password = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Button(
+                { model.login(username, password) },
+                enabled = !state.loading && username.isNotBlank() && password.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Sign in") }
+            OutlinedButton({ createMode = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Create new user")
+            }
+        }
+        if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
     }
 }
 
