@@ -42,10 +42,12 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { MaterialTheme { WorkOrderApp() } } }
@@ -441,6 +443,8 @@ private fun formatUsPhone(input: String): String {
     var translating by remember { mutableStateOf(false) }
     var translationError by remember { mutableStateOf<String?>(null) }
 
+    val languageIdentifier = remember { LanguageIdentification.getClient() }
+
     val englishToSpanish = remember {
         Translation.getClient(
             TranslatorOptions.Builder()
@@ -457,17 +461,26 @@ private fun formatUsPhone(input: String): String {
                 .build()
         )
     }
-    DisposableEffect(englishToSpanish, spanishToEnglish) {
+    DisposableEffect(languageIdentifier, englishToSpanish, spanishToEnglish) {
         onDispose {
+            languageIdentifier.close()
             englishToSpanish.close()
             spanishToEnglish.close()
         }
     }
 
+    LaunchedEffect(translatedText) {
+        if (translatedText != null) {
+            delay(8_000)
+            translatedText = null
+        }
+    }
+
     fun runTranslation(translator: Translator) {
-        if (value.isBlank() || translating) return
-        translating = true
-        translationError = null
+        if (value.isBlank()) {
+            translating = false
+            return
+        }
         val conditions = DownloadConditions.Builder().build()
         translator.downloadModelIfNeeded(conditions)
             .continueWithTask { translator.translate(value) }
@@ -481,27 +494,42 @@ private fun formatUsPhone(input: String): String {
             }
     }
 
+    fun detectAndTranslate() {
+        if (value.isBlank() || translating) return
+        translating = true
+        translatedText = null
+        translationError = null
+        languageIdentifier.identifyLanguage(value)
+            .addOnSuccessListener { languageCode ->
+                val translator = if (languageCode == "es") {
+                    spanishToEnglish
+                } else {
+                    englishToSpanish
+                }
+                runTranslation(translator)
+            }
+            .addOnFailureListener {
+                translationError = "Could not detect the language."
+                translating = false
+            }
+    }
+
     Column(Modifier.fillMaxWidth()) {
         OutlinedTextField(
             value,
             change,
             label = { Text(label) },
             enabled = enabled,
+            trailingIcon = {
+                IconButton(
+                    onClick = { detectAndTranslate() },
+                    enabled = value.isNotBlank() && !translating,
+                ) {
+                    Text("🌐", style = MaterialTheme.typography.titleMedium)
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            TextButton(
-                onClick = { runTranslation(englishToSpanish) },
-                enabled = value.isNotBlank() && !translating,
-            ) { Text("EN→ES") }
-            TextButton(
-                onClick = { runTranslation(spanishToEnglish) },
-                enabled = value.isNotBlank() && !translating,
-            ) { Text("ES→EN") }
-        }
         if (translating) LinearProgressIndicator(Modifier.fillMaxWidth())
         translatedText?.let { translation ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
