@@ -74,6 +74,9 @@ class MainActivity : ComponentActivity() {
     val passwordFocus = remember { FocusRequester() }
     val validEmail = email.isNotBlank() && Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
     val validPhone = phone.text.count(Char::isDigit) == 10
+    val validUsername = username.trim().length >= 2 &&
+        username.trim().all { it.isLetterOrDigit() || it in "_.-" }
+    val validPassword = password.length >= 8
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -141,6 +144,12 @@ class MainActivity : ComponentActivity() {
                 value = username,
                 onValueChange = { username = it },
                 label = { Text("Username") },
+                supportingText = {
+                    if (username.isNotBlank() && !validUsername) {
+                        Text("Use at least 2 letters or numbers; . _ and - are allowed")
+                    }
+                },
+                isError = username.isNotBlank() && !validUsername,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
                 singleLine = true,
@@ -150,6 +159,10 @@ class MainActivity : ComponentActivity() {
                 value = password,
                 onValueChange = { password = it },
                 label = { Text("Password (8+ characters)") },
+                supportingText = {
+                    if (password.isNotBlank() && !validPassword) Text("Password must be at least 8 characters")
+                },
+                isError = password.isNotBlank() && !validPassword,
                 visualTransformation = PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
@@ -169,7 +182,7 @@ class MainActivity : ComponentActivity() {
                     )
                 },
                 enabled = !state.loading && name.isNotBlank() &&
-                    validEmail && validPhone && username.length >= 3 && password.length >= 8,
+                    validEmail && validPhone && validUsername && validPassword,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Create user and sign in") }
             TextButton({ createMode = false }, modifier = Modifier.fillMaxWidth()) {
