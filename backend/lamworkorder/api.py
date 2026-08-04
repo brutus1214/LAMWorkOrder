@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from .auth import current_user, issue_token, require_roles, verify_password
+from .auth import current_user, hash_password, issue_token, require_roles, verify_password
 from .database import get_session
 from .models import Attachment, SessionToken, User
 from .repository import WorkOrderRepository
@@ -18,6 +18,7 @@ from .schemas import (
     LoginResponse,
     Priority,
     ProfileUpdate,
+    RegistrationRequest,
     Status,
     StatusUpdate,
     UserRead,
@@ -57,9 +58,35 @@ def health() -> Health:
 
 @router.post("/api/auth/login", response_model=LoginResponse, tags=["authentication"])
 def login(request: LoginRequest, session: Session = Depends(get_session)):
-    user = session.scalar(select(User).where(User.username == request.username.strip().lower()))
+    login_name = request.username.strip().lower()
+    user = session.scalar(
+        select(User).where((User.username == login_name) | (User.email == login_name))
+    )
     if not user or not user.is_active or not verify_password(request.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
+    return LoginResponse(token=issue_token(session, user), user=user)
+
+
+@router.post("/api/auth/register", response_model=LoginResponse, status_code=201, tags=["authentication"])
+def register(request: RegistrationRequest, session: Session = Depends(get_session)):
+    username = request.username.strip().lower()
+    email = request.email.strip().lower()
+    if session.scalar(select(User.id).where(User.username == username)):
+        raise HTTPException(status_code=409, detail="Username is already in use")
+    if session.scalar(select(User.id).where(User.email == email)):
+        raise HTTPException(status_code=409, detail="Email is already in use")
+    user = User(
+        username=username,
+        password_hash=hash_password(request.password),
+        display_name=request.display_name.strip(),
+        store_number=request.store_number,
+        email=email,
+        phone_number=request.phone_number.strip(),
+        role="Requester",
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
     return LoginResponse(token=issue_token(session, user), user=user)
 
 
