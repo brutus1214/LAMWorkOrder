@@ -60,10 +60,11 @@ def test_full_edit_and_multiple_attachments(client, tmp_path, monkeypatch):
     created = client.post("/api/work-orders", json=PAYLOAD).json()
     edited = client.put(
         f"/api/work-orders/{created['id']}",
-        json={**PAYLOAD, "title": "Fully edited", "status": "Scheduled", "statusNote": "Ready"},
+        json={**PAYLOAD, "storeNumber": 9, "title": "Fully edited", "status": "Scheduled", "statusNote": "Ready"},
     )
     assert edited.status_code == 200
     assert edited.json()["title"] == "Fully edited"
+    assert edited.json()["storeNumber"] == PAYLOAD["storeNumber"]
     uploaded = client.post(
         f"/api/work-orders/{created['id']}/attachments",
         files=[

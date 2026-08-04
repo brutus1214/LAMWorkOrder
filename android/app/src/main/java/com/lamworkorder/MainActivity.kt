@@ -359,16 +359,16 @@ private fun formatUsPhone(input: String): String {
 
 @Composable private fun Detail(model:WorkOrderViewModel,o:WorkOrder,user:User,back:()->Unit){
     val full=user.role in listOf("Admin","Manager"); val statusEdit=full||user.role=="Technician"
-    var store by remember{mutableStateOf(o.storeNumber.toString())};var title by remember{mutableStateOf(o.title)};var description by remember{mutableStateOf(o.description)};var requester by remember{mutableStateOf(o.requestedBy)};var location by remember{mutableStateOf(o.location)};var priority by remember{mutableStateOf(o.priority)};var assigned by remember{mutableStateOf(o.assignedTo.orEmpty())};var status by remember{mutableStateOf(o.status)};var note by remember{mutableStateOf(o.statusNote.orEmpty())}
+    var title by remember{mutableStateOf(o.title)};var description by remember{mutableStateOf(o.description)};var requester by remember{mutableStateOf(o.requestedBy)};var location by remember{mutableStateOf(o.location)};var priority by remember{mutableStateOf(o.priority)};var assigned by remember{mutableStateOf(o.assignedTo.orEmpty())};var status by remember{mutableStateOf(o.status)};var note by remember{mutableStateOf(o.statusNote.orEmpty())}
     val context=LocalContext.current
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()){uris:List<Uri>->val parts=uris.mapNotNull{uri->context.contentResolver.openInputStream(uri)?.use{input->val bytes=input.readBytes();val type=context.contentResolver.getType(uri)?:"application/octet-stream";MultipartBody.Part.createFormData("files","attachment",bytes.toRequestBody(type.toMediaType()))}};if(parts.isNotEmpty())model.upload(o.id,parts,back)}
     LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){item{Button(back){Text("Back")}};item{Text(o.workOrderNumber,fontWeight=FontWeight.Bold)}
-        item{Field("Store",store,{store=it},full,translate=false)};item{Field("Title",title,{title=it},full)};item{Field("Description",description,{description=it},full)};item{Field("Requested by",requester,{requester=it},full)};item{Field("Location",location,{location=it},full)}
+        item{OutlinedTextField(value="LA Mart ${o.storeNumber}",onValueChange={},readOnly=true,label={Text("Store")},supportingText={Text("Set when work order was created")},modifier=Modifier.fillMaxWidth())};item{Field("Title",title,{title=it},full)};item{Field("Description",description,{description=it},full)};item{Field("Requested by",requester,{requester=it},full)};item{Field("Location",location,{location=it},full)}
         item{SelectionField("Priority",priority,listOf("Low","Normal","High","Emergency"),{priority=it},full)}
         item{Field("Assigned to",assigned,{assigned=it},full)}
         item{SelectionField("Status",status,listOf("New","Scheduled","InProgress","Blocked","Completed","Cancelled"),{status=it},statusEdit) { if(it=="InProgress") "In Progress" else it }}
         item{Field("Status note",note,{note=it},statusEdit)}
-        if(full)item{Button({model.update(o.id,UpdateWorkOrder(store.toInt(),title,description,requester,location,priority,assigned.ifBlank{null},o.dueAt,status,note.ifBlank{null}),back)},enabled=store.toIntOrNull()!=null){Text("Save all details")}}
+        if(full)item{Button({model.update(o.id,UpdateWorkOrder(o.storeNumber,title,description,requester,location,priority,assigned.ifBlank{null},o.dueAt,status,note.ifBlank{null}),back)}){Text("Save all details")}}
         else if(statusEdit)item{Button({model.updateStatus(o.id,status,note,back)}){Text("Save status")}}
         if(statusEdit)item{Button({picker.launch(arrayOf("image/*","video/*"))}){Text("Add photos or videos")}}
         item{Text("Attachments",style=MaterialTheme.typography.titleMedium)};items(o.attachments){a->Text("${a.originalName} (${a.sizeBytes/1024} KB)")}

@@ -60,6 +60,9 @@ class WorkOrderRepository:
 
     def update(self, item: WorkOrder, request: WorkOrderUpdate):
         values = request.model_dump(mode="python")
+        # A work order belongs permanently to the store selected at creation.
+        # Ignore any stale or manipulated client value during later edits.
+        values.pop("store_number", None)
         values["priority"] = request.priority.value
         values["status"] = request.status.value
         for name, value in values.items():
