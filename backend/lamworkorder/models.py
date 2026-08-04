@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -15,7 +15,8 @@ class WorkOrder(Base):
     __tablename__ = "work_orders"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    work_order_number: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    work_order_number: Mapped[str] = mapped_column(String(30), unique=True, index=True)
+    store_number: Mapped[int] = mapped_column(Integer, index=True, default=1)
     title: Mapped[str] = mapped_column(String(120))
     description: Mapped[str] = mapped_column(Text)
     requested_by: Mapped[str] = mapped_column(String(120))
