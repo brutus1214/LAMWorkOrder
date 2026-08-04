@@ -26,7 +26,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -65,13 +67,13 @@ class MainActivity : ComponentActivity() {
     var name by remember { mutableStateOf("") }
     var store by remember { mutableIntStateOf(1) }
     var email by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf(TextFieldValue("")) }
     val emailFocus = remember { FocusRequester() }
     val phoneFocus = remember { FocusRequester() }
     val usernameFocus = remember { FocusRequester() }
     val passwordFocus = remember { FocusRequester() }
     val validEmail = email.isNotBlank() && Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
-    val validPhone = phone.count(Char::isDigit) == 10
+    val validPhone = phone.text.count(Char::isDigit) == 10
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -115,12 +117,18 @@ class MainActivity : ComponentActivity() {
             )
             OutlinedTextField(
                 value = phone,
-                onValueChange = { phone = formatUsPhone(it) },
+                onValueChange = { incoming ->
+                    val formatted = formatUsPhone(incoming.text)
+                    phone = TextFieldValue(
+                        text = formatted,
+                        selection = TextRange(formatted.length),
+                    )
+                },
                 label = { Text("Phone number for texting") },
                 supportingText = {
-                    if (phone.isNotBlank() && !validPhone) Text("Enter a 10-digit phone number")
+                    if (phone.text.isNotBlank() && !validPhone) Text("Enter a 10-digit phone number")
                 },
-                isError = phone.isNotBlank() && !validPhone,
+                isError = phone.text.isNotBlank() && !validPhone,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Phone,
                     imeAction = ImeAction.Next,
@@ -156,7 +164,7 @@ class MainActivity : ComponentActivity() {
                     model.register(
                         RegistrationRequest(
                             username.trim(), password, name.trim(), store,
-                            email.trim(), phone.trim(),
+                            email.trim(), phone.text.trim(),
                         )
                     )
                 },
