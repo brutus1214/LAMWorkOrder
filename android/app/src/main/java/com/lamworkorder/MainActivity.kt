@@ -31,6 +31,11 @@ import com.lamworkorder.data.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import com.google.mlkit.nl.translate.DownloadConditions
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
+import com.google.mlkit.nl.translate.TranslatorOptions
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { MaterialTheme { WorkOrderApp() } } }
@@ -186,7 +191,7 @@ class MainActivity : ComponentActivity() {
     val context=LocalContext.current
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()){uris:List<Uri>->val parts=uris.mapNotNull{uri->context.contentResolver.openInputStream(uri)?.use{input->val bytes=input.readBytes();val type=context.contentResolver.getType(uri)?:"application/octet-stream";MultipartBody.Part.createFormData("files","attachment",bytes.toRequestBody(type.toMediaType()))}};if(parts.isNotEmpty())model.upload(o.id,parts,back)}
     LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){item{Button(back){Text("Back")}};item{Text(o.workOrderNumber,fontWeight=FontWeight.Bold)}
-        item{Field("Store",store,{store=it},full)};item{Field("Title",title,{title=it},full)};item{Field("Description",description,{description=it},full)};item{Field("Requested by",requester,{requester=it},full)};item{Field("Location",location,{location=it},full)};item{Field("Priority",priority,{priority=it},full)};item{Field("Assigned to",assigned,{assigned=it},full)};item{Field("Status",status,{status=it},statusEdit)};item{Field("Status note",note,{note=it},statusEdit)}
+        item{Field("Store",store,{store=it},full,translate=false)};item{Field("Title",title,{title=it},full)};item{Field("Description",description,{description=it},full)};item{Field("Requested by",requester,{requester=it},full)};item{Field("Location",location,{location=it},full)};item{Field("Priority",priority,{priority=it},full)};item{Field("Assigned to",assigned,{assigned=it},full)};item{Field("Status",status,{status=it},statusEdit)};item{Field("Status note",note,{note=it},statusEdit)}
         if(full)item{Button({model.update(o.id,UpdateWorkOrder(store.toInt(),title,description,requester,location,priority,assigned.ifBlank{null},o.dueAt,status,note.ifBlank{null}),back)},enabled=store.toIntOrNull()!=null){Text("Save all details")}}
         else if(statusEdit)item{Button({model.updateStatus(o.id,status,note,back)}){Text("Save status")}}
         if(statusEdit)item{Button({picker.launch(arrayOf("image/*","video/*"))}){Text("Add photos or videos")}}
@@ -194,6 +199,111 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable private fun Field(label:String,value:String,change:(String)->Unit,enabled:Boolean){OutlinedTextField(value,change,label={Text(label)},enabled=enabled,modifier=Modifier.fillMaxWidth())}
+@Composable private fun Field(
+    label: String,
+    value: String,
+    change: (String) -> Unit,
+    enabled: Boolean,
+    translate: Boolean = true,
+) {
+    if (!translate) {
+        OutlinedTextField(
+            value,
+            change,
+            label = { Text(label) },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        return
+    }
+    TranslatableField(label, value, change, enabled)
+}
+
+@Composable private fun TranslatableField(
+    label: String,
+    value: String,
+    change: (String) -> Unit,
+    enabled: Boolean,
+) {
+    var translatedText by remember(value) { mutableStateOf<String?>(null) }
+    var translating by remember { mutableStateOf(false) }
+    var translationError by remember { mutableStateOf<String?>(null) }
+
+    val englishToSpanish = remember {
+        Translation.getClient(
+            TranslatorOptions.Builder()
+                .setSourceLanguage(TranslateLanguage.ENGLISH)
+                .setTargetLanguage(TranslateLanguage.SPANISH)
+                .build()
+        )
+    }
+    val spanishToEnglish = remember {
+        Translation.getClient(
+            TranslatorOptions.Builder()
+                .setSourceLanguage(TranslateLanguage.SPANISH)
+                .setTargetLanguage(TranslateLanguage.ENGLISH)
+                .build()
+        )
+    }
+    DisposableEffect(englishToSpanish, spanishToEnglish) {
+        onDispose {
+            englishToSpanish.close()
+            spanishToEnglish.close()
+        }
+    }
+
+    fun runTranslation(translator: Translator) {
+        if (value.isBlank() || translating) return
+        translating = true
+        translationError = null
+        val conditions = DownloadConditions.Builder().build()
+        translator.downloadModelIfNeeded(conditions)
+            .continueWithTask { translator.translate(value) }
+            .addOnSuccessListener {
+                translatedText = it
+                translating = false
+            }
+            .addOnFailureListener {
+                translationError = "Translation unavailable. Check internet once to download the language model."
+                translating = false
+            }
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value,
+            change,
+            label = { Text(label) },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            TextButton(
+                onClick = { runTranslation(englishToSpanish) },
+                enabled = value.isNotBlank() && !translating,
+            ) { Text("EN→ES") }
+            TextButton(
+                onClick = { runTranslation(spanishToEnglish) },
+                enabled = value.isNotBlank() && !translating,
+            ) { Text("ES→EN") }
+        }
+        if (translating) LinearProgressIndicator(Modifier.fillMaxWidth())
+        translatedText?.let {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(it, Modifier.padding(10.dp))
+            }
+        }
+        translationError?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
 
 @Composable private fun Intake(model:WorkOrderViewModel){var open by remember{mutableStateOf(false)};var store by remember{mutableStateOf("1")};var title by remember{mutableStateOf("")};var description by remember{mutableStateOf("")};var requester by remember{mutableStateOf("")};var location by remember{mutableStateOf("")};Button({open=!open},Modifier.fillMaxWidth()){Text(if(open)"Close intake" else "New work order")};if(open)Column{Field("Store",store,{store=it.filter(Char::isDigit)},true);Field("Title",title,{title=it},true);Field("Description",description,{description=it},true);Field("Requested by",requester,{requester=it},true);Field("Location",location,{location=it},true);Button({model.create(CreateWorkOrder(store.toInt(),title,description,requester,location)){open=false}},enabled=store.toIntOrNull()!=null&&listOf(title,description,requester,location).all(String::isNotBlank)){Text("Create")}}}
