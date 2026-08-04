@@ -30,6 +30,13 @@ class Status(StrEnum):
     CANCELLED = "Cancelled"
 
 
+class Role(StrEnum):
+    ADMIN = "Admin"
+    MANAGER = "Manager"
+    TECHNICIAN = "Technician"
+    REQUESTER = "Requester"
+
+
 class WorkOrderCreate(ApiModel):
     store_number: int = Field(default=1, ge=1, le=9999)
     title: str = Field(min_length=1, max_length=120)
@@ -39,6 +46,11 @@ class WorkOrderCreate(ApiModel):
     priority: Priority = Priority.NORMAL
     assigned_to: str | None = Field(default=None, max_length=120)
     due_at: datetime | None = None
+
+
+class WorkOrderUpdate(WorkOrderCreate):
+    status: Status
+    status_note: str | None = Field(default=None, max_length=1000)
 
 
 class StatusUpdate(ApiModel):
@@ -53,6 +65,39 @@ class WorkOrderRead(WorkOrderCreate):
     created_at: datetime
     updated_at: datetime
     status_note: str | None = None
+    attachments: list["AttachmentRead"] = []
+
+
+class LoginRequest(ApiModel):
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class ProfileUpdate(ApiModel):
+    display_name: str = Field(min_length=1, max_length=120)
+    email: str | None = Field(default=None, max_length=254)
+
+
+class UserRead(ApiModel):
+    id: UUID
+    username: str
+    display_name: str
+    email: str | None
+    role: Role
+
+
+class LoginResponse(ApiModel):
+    token: str
+    user: UserRead
+
+
+class AttachmentRead(ApiModel):
+    id: UUID
+    original_name: str
+    content_type: str
+    size_bytes: int
+    created_at: datetime
+    url: str
 
 
 class Health(ApiModel):

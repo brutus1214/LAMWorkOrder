@@ -2,38 +2,62 @@ package com.lamworkorder
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lamworkorder.data.CreateWorkOrder
-import com.lamworkorder.data.WorkOrder
-import com.lamworkorder.data.WorkOrderApi
+import com.lamworkorder.data.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import okhttp3.MultipartBody
 
 data class QueueState(
-    val orders: List<WorkOrder> = emptyList(),
-    val loading: Boolean = false,
-    val error: String? = null,
+    val orders: List<WorkOrder> = emptyList(), val user: User? = null,
+    val loading: Boolean = false, val error: String? = null,
 )
 
 class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) : ViewModel() {
     private val _state = MutableStateFlow(QueueState())
     val state: StateFlow<QueueState> = _state.asStateFlow()
+    private var token: String? = null
+    private fun auth() = "Bearer ${token ?: error("Not signed in")}"
 
-    init { refresh() }
-
-    fun refresh(search: String? = null) = viewModelScope.launch {
+    fun login(username: String, password: String) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
-        runCatching { api.list(search = search?.takeIf { it.isNotBlank() }) }
-            .onSuccess { _state.value = QueueState(orders = it) }
-            .onFailure { _state.value = QueueState(error = it.message ?: "Unable to load queue") }
+        runCatching { api.login(LoginRequest(username.trim(), password)) }
+            .onSuccess { token = it.token; _state.value = QueueState(user = it.user); refresh() }
+            .onFailure { _state.value = QueueState(error = it.message ?: "Unable to sign in") }
     }
 
-    fun create(request: CreateWorkOrder, onComplete: () -> Unit) = viewModelScope.launch {
+    fun logout() { token = null; _state.value = QueueState() }
+
+    fun refresh(search: String? = null) = viewModelScope.launch {
+        if (token == null) return@launch
         _state.value = _state.value.copy(loading = true, error = null)
-        runCatching { api.create(request) }
-            .onSuccess { refresh(); onComplete() }
+        runCatching { api.list(auth(), search = search?.takeIf(String::isNotBlank)) }
+            .onSuccess { _state.value = _state.value.copy(orders = it, loading = false) }
+            .onFailure { _state.value = _state.value.copy(loading = false, error = it.message ?: "Unable to load queue") }
+    }
+
+    fun create(request: CreateWorkOrder, done: () -> Unit) = perform({ api.create(auth(), request) }, done)
+    fun update(id: String, request: UpdateWorkOrder, done: () -> Unit) = perform({ api.update(auth(), id, request) }, done)
+    fun updateStatus(id: String, status: String, note: String?, done: () -> Unit) = perform({ api.updateStatus(auth(), id, StatusUpdate(status, note)) }, done)
+
+    fun updateProfile(name: String, email: String?, done: () -> Unit) = viewModelScope.launch {
+        runCatching { api.updateProfile(auth(), ProfileUpdate(name, email?.takeIf(String::isNotBlank))) }
+            .onSuccess { _state.value = _state.value.copy(user = it, error = null); done() }
+            .onFailure { _state.value = _state.value.copy(error = it.message) }
+    }
+
+    fun upload(id: String, parts: List<MultipartBody.Part>, done: () -> Unit) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { api.upload(auth(), id, parts) }
+            .onSuccess { refresh(); done() }
+            .onFailure { _state.value = _state.value.copy(loading = false, error = it.message) }
+    }
+
+    private fun perform(block: suspend () -> WorkOrder, done: () -> Unit) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { block() }
+            .onSuccess { refresh(); done() }
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.message) }
     }
 }
-

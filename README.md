@@ -2,6 +2,8 @@
 
 LAMWorkOrder is a shared work-order system built with Python and Kotlin.
 
+The Android client and API include bearer-token login, editable user profiles, server-enforced role permissions, full work-order editing for managers/admins, technician status updates, and multiple photo/video attachments. Existing SQLite work orders are upgraded in place and are not deleted.
+
 | Folder | Application |
 | --- | --- |
 | `backend/` | FastAPI backend, SQLite database, and web dashboard |

@@ -7,8 +7,7 @@ import org.junit.Test
 class ModelsTest {
     @Test
     fun createWorkOrderDefaultsToNormalPriority() {
-        val request = CreateWorkOrder("Title", "Description", "Requester", "Location")
+        val request = CreateWorkOrder(1, "Title", "Description", "Requester", "Location")
         assertEquals("Normal", request.priority)
     }
 }
-

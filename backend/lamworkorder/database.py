@@ -26,8 +26,12 @@ def ensure_schema() -> None:
     if "store_number" not in columns:
         with engine.begin() as connection:
             connection.exec_driver_sql(
-                "ALTER TABLE work_orders "
-                "ADD COLUMN store_number INTEGER NOT NULL DEFAULT 1"
+                "ALTER TABLE work_orders ADD COLUMN store_number INTEGER NOT NULL DEFAULT 1"
+            )
+    if "created_by_id" not in columns:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "ALTER TABLE work_orders ADD COLUMN created_by_id VARCHAR(36)"
             )
 
 

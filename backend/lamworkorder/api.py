@@ -1,23 +1,89 @@
 from datetime import UTC, datetime
-from uuid import UUID
+from pathlib import Path
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from .auth import current_user, issue_token, require_roles, verify_password
 from .database import get_session
+from .models import Attachment, SessionToken, User
 from .repository import WorkOrderRepository
-from .schemas import Health, Priority, Status, StatusUpdate, WorkOrderCreate, WorkOrderRead
+from .schemas import (
+    AttachmentRead,
+    Health,
+    LoginRequest,
+    LoginResponse,
+    Priority,
+    ProfileUpdate,
+    Status,
+    StatusUpdate,
+    UserRead,
+    WorkOrderCreate,
+    WorkOrderRead,
+    WorkOrderUpdate,
+)
 
 router = APIRouter()
+UPLOADS = Path("uploads")
+MAX_FILE_SIZE = 50 * 1024 * 1024
+ALLOWED_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "video/mp4",
+    "video/quicktime",
+    "video/webm",
+}
 
 
 def repository(session: Session = Depends(get_session)) -> WorkOrderRepository:
     return WorkOrderRepository(session)
 
 
+def find_order(work_order_id: UUID, repo: WorkOrderRepository):
+    item = repo.get(str(work_order_id))
+    if not item:
+        raise HTTPException(status_code=404, detail="Work order not found")
+    return item
+
+
 @router.get("/health", response_model=Health, tags=["system"])
 def health() -> Health:
     return Health(status="ok", server_time=datetime.now(UTC))
+
+
+@router.post("/api/auth/login", response_model=LoginResponse, tags=["authentication"])
+def login(request: LoginRequest, session: Session = Depends(get_session)):
+    user = session.scalar(select(User).where(User.username == request.username.strip().lower()))
+    if not user or not user.is_active or not verify_password(request.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    return LoginResponse(token=issue_token(session, user), user=user)
+
+
+@router.post("/api/auth/logout", status_code=204, tags=["authentication"])
+def logout(user: User = Depends(current_user), session: Session = Depends(get_session)):
+    session.execute(delete(SessionToken).where(SessionToken.user_id == user.id))
+    session.commit()
+
+
+@router.get("/api/profile", response_model=UserRead, tags=["profile"])
+def profile(user: User = Depends(current_user)):
+    return user
+
+
+@router.patch("/api/profile", response_model=UserRead, tags=["profile"])
+def update_profile(
+    request: ProfileUpdate,
+    user: User = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    user.display_name = request.display_name.strip()
+    user.email = request.email.strip() if request.email else None
+    session.commit()
+    return user
 
 
 @router.get("/api/work-orders", response_model=list[WorkOrderRead], tags=["work orders"])
@@ -26,39 +92,118 @@ def list_work_orders(
     priority: Priority | None = None,
     search: str | None = None,
     repo: WorkOrderRepository = Depends(repository),
+    _: User = Depends(current_user),
 ):
     return repo.list(work_order_status, priority, search)
 
 
 @router.get("/api/work-orders/{work_order_id}", response_model=WorkOrderRead, tags=["work orders"])
-def get_work_order(work_order_id: UUID, repo: WorkOrderRepository = Depends(repository)):
-    item = repo.get(str(work_order_id))
-    if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work order not found")
-    return item
+def get_work_order(
+    work_order_id: UUID,
+    repo: WorkOrderRepository = Depends(repository),
+    _: User = Depends(current_user),
+):
+    return find_order(work_order_id, repo)
 
 
 @router.post(
-    "/api/work-orders",
-    response_model=WorkOrderRead,
-    status_code=status.HTTP_201_CREATED,
-    tags=["work orders"],
+    "/api/work-orders", response_model=WorkOrderRead, status_code=201, tags=["work orders"]
 )
-def create_work_order(request: WorkOrderCreate, repo: WorkOrderRepository = Depends(repository)):
-    return repo.create(request)
+def create_work_order(
+    request: WorkOrderCreate,
+    repo: WorkOrderRepository = Depends(repository),
+    user: User = Depends(current_user),
+):
+    return repo.create(request, user.id)
+
+
+@router.put("/api/work-orders/{work_order_id}", response_model=WorkOrderRead, tags=["work orders"])
+def update_work_order(
+    work_order_id: UUID,
+    request: WorkOrderUpdate,
+    repo: WorkOrderRepository = Depends(repository),
+    _: User = Depends(require_roles("Admin", "Manager")),
+):
+    return repo.update(find_order(work_order_id, repo), request)
 
 
 @router.patch(
-    "/api/work-orders/{work_order_id}/status",
-    response_model=WorkOrderRead,
-    tags=["work orders"],
+    "/api/work-orders/{work_order_id}/status", response_model=WorkOrderRead, tags=["work orders"]
 )
 def update_status(
     work_order_id: UUID,
     request: StatusUpdate,
     repo: WorkOrderRepository = Depends(repository),
+    _: User = Depends(require_roles("Admin", "Manager", "Technician")),
 ):
-    item = repo.get(str(work_order_id))
-    if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work order not found")
-    return repo.update_status(item, request)
+    return repo.update_status(find_order(work_order_id, repo), request)
+
+
+@router.post(
+    "/api/work-orders/{work_order_id}/attachments",
+    response_model=list[AttachmentRead],
+    status_code=201,
+    tags=["attachments"],
+)
+async def upload_attachments(
+    work_order_id: UUID,
+    files: list[UploadFile] = File(...),
+    repo: WorkOrderRepository = Depends(repository),
+    user: User = Depends(require_roles("Admin", "Manager", "Technician")),
+):
+    item = find_order(work_order_id, repo)
+    if not files:
+        raise HTTPException(status_code=422, detail="At least one file is required")
+    UPLOADS.mkdir(parents=True, exist_ok=True)
+    created = []
+    for upload in files:
+        content_type = (upload.content_type or "").lower()
+        if content_type not in ALLOWED_TYPES:
+            raise HTTPException(status_code=415, detail=f"Unsupported media type: {content_type}")
+        data = await upload.read(MAX_FILE_SIZE + 1)
+        if len(data) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="Each attachment must be 50 MB or smaller")
+        suffix = Path(upload.filename or "attachment").suffix.lower()
+        stored_name = f"{uuid4().hex}{suffix}"
+        (UPLOADS / stored_name).write_bytes(data)
+        attachment = Attachment(
+            work_order_id=item.id,
+            original_name=Path(upload.filename or "attachment").name,
+            stored_name=stored_name,
+            content_type=content_type,
+            size_bytes=len(data),
+            uploaded_by_id=user.id,
+        )
+        repo.session.add(attachment)
+        created.append(attachment)
+    repo.session.commit()
+    return created
+
+
+@router.get("/api/attachments/{attachment_id}/content", tags=["attachments"])
+def attachment_content(
+    attachment_id: UUID, session: Session = Depends(get_session), _: User = Depends(current_user)
+):
+    attachment = session.get(Attachment, str(attachment_id))
+    if not attachment or not (UPLOADS / attachment.stored_name).is_file():
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    return FileResponse(
+        UPLOADS / attachment.stored_name,
+        media_type=attachment.content_type,
+        filename=attachment.original_name,
+    )
+
+
+@router.delete("/api/attachments/{attachment_id}", status_code=204, tags=["attachments"])
+def delete_attachment(
+    attachment_id: UUID,
+    session: Session = Depends(get_session),
+    _: User = Depends(require_roles("Admin", "Manager")),
+):
+    attachment = session.get(Attachment, str(attachment_id))
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    path = UPLOADS / attachment.stored_name
+    session.delete(attachment)
+    session.commit()
+    path.unlink(missing_ok=True)

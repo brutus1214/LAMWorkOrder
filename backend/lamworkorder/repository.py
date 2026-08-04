@@ -2,7 +2,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .models import WorkOrder, utc_now
-from .schemas import Priority, Status, StatusUpdate, WorkOrderCreate
+from .schemas import Priority, Status, StatusUpdate, WorkOrderCreate, WorkOrderUpdate
 
 
 class WorkOrderRepository:
@@ -31,7 +31,7 @@ class WorkOrderRepository:
     def get(self, work_order_id: str):
         return self.session.get(WorkOrder, work_order_id)
 
-    def create(self, request: WorkOrderCreate):
+    def create(self, request: WorkOrderCreate, created_by_id: str | None = None):
         year = utc_now().year
         prefix = f"WO-{request.store_number}-{year}-"
         existing_numbers = self.session.scalars(
@@ -51,9 +51,20 @@ class WorkOrderRepository:
         values["priority"] = request.priority.value
         item = WorkOrder(
             work_order_number=f"{prefix}{next_sequence:04d}",
+            created_by_id=created_by_id,
             **values,
         )
         self.session.add(item)
+        self.session.commit()
+        return item
+
+    def update(self, item: WorkOrder, request: WorkOrderUpdate):
+        values = request.model_dump(mode="python")
+        values["priority"] = request.priority.value
+        values["status"] = request.status.value
+        for name, value in values.items():
+            setattr(item, name, value)
+        item.updated_at = utc_now()
         self.session.commit()
         return item
 
