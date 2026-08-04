@@ -45,12 +45,30 @@ def test_login_profile_and_permissions(client):
     )
     requester = {"Authorization": f"Bearer {login.json()['token']}"}
     created = client.post("/api/work-orders", json=PAYLOAD, headers=requester).json()
+    assert created["requestedBy"] == "Requester"
     denied = client.put(
         f"/api/work-orders/{created['id']}",
         json={**PAYLOAD, "status": "Scheduled", "statusNote": "planned"},
         headers=requester,
     )
     assert denied.status_code == 403
+
+
+def test_requester_can_attach_media_to_new_work_order(client, tmp_path, monkeypatch):
+    import lamworkorder.api as api
+
+    monkeypatch.setattr(api, "UPLOADS", tmp_path)
+    login = client.post(
+        "/api/auth/login", json={"username": "requester", "password": "test-password"}
+    )
+    requester = {"Authorization": f"Bearer {login.json()['token']}"}
+    created = client.post("/api/work-orders", json=PAYLOAD, headers=requester).json()
+    uploaded = client.post(
+        f"/api/work-orders/{created['id']}/attachments",
+        files=[("files", ("proof.jpg", b"jpeg", "image/jpeg"))],
+        headers=requester,
+    )
+    assert uploaded.status_code == 201
 
 
 def test_full_edit_and_multiple_attachments(client, tmp_path, monkeypatch):

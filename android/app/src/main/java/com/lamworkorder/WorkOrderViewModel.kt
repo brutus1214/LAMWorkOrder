@@ -44,7 +44,20 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.message ?: "Unable to load queue") }
     }
 
-    fun create(request: CreateWorkOrder, done: () -> Unit) = perform({ api.create(auth(), request) }, done)
+    fun create(
+        request: CreateWorkOrder,
+        attachments: List<MultipartBody.Part> = emptyList(),
+        done: () -> Unit,
+    ) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching {
+            val created = api.create(auth(), request)
+            if (attachments.isNotEmpty()) api.upload(auth(), created.id, attachments)
+            created
+        }
+            .onSuccess { refresh(); done() }
+            .onFailure { _state.value = _state.value.copy(loading = false, error = it.message) }
+    }
     fun update(id: String, request: UpdateWorkOrder, done: () -> Unit) = perform({ api.update(auth(), id, request) }, done)
     fun updateStatus(id: String, status: String, note: String?, done: () -> Unit) = perform({ api.updateStatus(auth(), id, StatusUpdate(status, note)) }, done)
 

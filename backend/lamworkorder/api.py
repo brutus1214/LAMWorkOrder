@@ -22,8 +22,8 @@ from .schemas import (
     RegistrationRequest,
     Status,
     StatusUpdate,
-    UserRead,
     UserAdminUpdate,
+    UserRead,
     WorkOrderCreate,
     WorkOrderRead,
     WorkOrderUpdate,
@@ -200,6 +200,7 @@ def create_work_order(
     repo: WorkOrderRepository = Depends(repository),
     user: User = Depends(current_user),
 ):
+    request = request.model_copy(update={'requested_by': user.display_name})
     return repo.create(request, user.id)
 
 
@@ -235,7 +236,7 @@ async def upload_attachments(
     work_order_id: UUID,
     files: list[UploadFile] = File(...),
     repo: WorkOrderRepository = Depends(repository),
-    user: User = Depends(require_roles("Admin", "Manager", "Technician")),
+    user: User = Depends(current_user),
 ):
     item = find_order(work_order_id, repo)
     if not files:

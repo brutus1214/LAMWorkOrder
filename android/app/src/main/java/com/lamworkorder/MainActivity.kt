@@ -304,7 +304,7 @@ private fun formatUsPhone(input: String): String {
         Row{OutlinedTextField(search,{search=it},label={Text("Search")},modifier=Modifier.weight(1f));Button({model.refresh(search)}){Text("Go")}}
         if(state.loading) LinearProgressIndicator(Modifier.fillMaxWidth()); state.error?.let{Text(it,color=MaterialTheme.colorScheme.error)}
         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)){items(state.orders,key={it.id}){o->Card(Modifier.fillMaxWidth().clickable{select(o)}){Column(Modifier.padding(14.dp)){Text(o.workOrderNumber,fontWeight=FontWeight.Bold);Text(o.title,style=MaterialTheme.typography.titleMedium);Text("Store ${o.storeNumber} · ${o.location} · ${o.status}")}}}}
-        Intake(model)
+        Intake(model, currentUser)
     }
 }
 
@@ -556,4 +556,64 @@ private fun formatUsPhone(input: String): String {
     }
 }
 
-@Composable private fun Intake(model:WorkOrderViewModel){var open by remember{mutableStateOf(false)};var store by remember{mutableStateOf("1")};var title by remember{mutableStateOf("")};var description by remember{mutableStateOf("")};var requester by remember{mutableStateOf("")};var location by remember{mutableStateOf("")};var priority by remember{mutableStateOf("Normal")};Button({open=!open},Modifier.fillMaxWidth()){Text(if(open)"Close intake" else "New work order")};if(open)Column{Field("Store",store,{store=it.filter(Char::isDigit)},true,translate=false);Field("Title",title,{title=it},true);Field("Description",description,{description=it},true);Field("Requested by",requester,{requester=it},true);Field("Location",location,{location=it},true);SelectionField("Priority",priority,listOf("Low","Normal","High","Emergency"),{priority=it},true);Button({model.create(CreateWorkOrder(store.toInt(),title,description,requester,location,priority)){open=false}},enabled=store.toIntOrNull()!=null&&listOf(title,description,requester,location).all(String::isNotBlank)){Text("Create")}}}
+@Composable private fun Intake(model: WorkOrderViewModel, user: User) {
+    var open by remember { mutableStateOf(false) }
+    var store by remember(user.id) { mutableIntStateOf(user.storeNumber) }
+    var title by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var location by remember { mutableStateOf("") }
+    var priority by remember { mutableStateOf("Normal") }
+    var attachments by remember { mutableStateOf<List<MultipartBody.Part>>(emptyList()) }
+    val context = LocalContext.current
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
+        attachments = uris.mapNotNull { uri ->
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val bytes = input.readBytes()
+                val type = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                MultipartBody.Part.createFormData(
+                    "files",
+                    uri.lastPathSegment ?: "attachment",
+                    bytes.toRequestBody(type.toMediaType()),
+                )
+            }
+        }
+    }
+
+    Button({ open = !open }, Modifier.fillMaxWidth()) {
+        Text(if (open) "Close intake" else "New work order")
+    }
+    if (open) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        StoreDropdown(store, { store = it }, Modifier.fillMaxWidth())
+        Field("Title", title, { title = it }, true)
+        Field("Description", description, { description = it }, true)
+        OutlinedTextField(
+            value = user.displayName,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Requested by") },
+            supportingText = { Text("Current signed-in user") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Field("Location", location, { location = it }, true)
+        SelectionField("Priority", priority, listOf("Low", "Normal", "High", "Emergency"), { priority = it }, true)
+        OutlinedButton(
+            { picker.launch(arrayOf("image/*", "video/*")) },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (attachments.isEmpty()) "Add pictures or videos" else "${attachments.size} attachment(s) selected")
+        }
+        Button(
+            {
+                model.create(
+                    CreateWorkOrder(store, title, description, user.displayName, location, priority),
+                    attachments,
+                ) {
+                    open = false
+                    attachments = emptyList()
+                }
+            },
+            enabled = title.isNotBlank() && description.isNotBlank() && location.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Create") }
+    }
+}
