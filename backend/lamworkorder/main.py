@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api import router
-from .database import Base, SessionLocal, engine
+from .database import Base, SessionLocal, engine, ensure_schema
 from .repository import WorkOrderRepository
 from .schemas import Priority, WorkOrderCreate
 
@@ -16,11 +16,13 @@ WEB = Path(__file__).parent / "web"
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(engine)
+    ensure_schema()
     with SessionLocal() as session:
         repo = WorkOrderRepository(session)
         if not repo.list(None, None, None):
             repo.create(
                 WorkOrderCreate(
+                    storeNumber=1,
                     title="Inspect pump vibration",
                     description="Elevated vibration reported during second shift.",
                     requestedBy="Operations",
@@ -33,7 +35,7 @@ async def lifespan(_: FastAPI):
 
 
 def create_app() -> FastAPI:
-    application = FastAPI(title="LAMWorkOrder API", version="2.0.0", lifespan=lifespan)
+    application = FastAPI(title="LAMWorkOrder API", version="2.1.0", lifespan=lifespan)
     application.include_router(router)
     application.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")
 
