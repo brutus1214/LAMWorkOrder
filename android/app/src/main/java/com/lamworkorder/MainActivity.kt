@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -45,6 +47,13 @@ class MainActivity : ComponentActivity() {
 fun WorkOrderApp(model: WorkOrderViewModel = viewModel()) {
     val state by model.state.collectAsState()
     var search by remember { mutableStateOf("") }
+    var selectedOrder by remember { mutableStateOf<WorkOrder?>(null) }
+
+    selectedOrder?.let { order ->
+        WorkOrderDetail(order = order, onBack = { selectedOrder = null })
+        return
+    }
+
     Column(
         Modifier.fillMaxSize().background(Color(0xFFF0F4F7)).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -58,29 +67,65 @@ fun WorkOrderApp(model: WorkOrderViewModel = viewModel()) {
         if (state.loading) CircularProgressIndicator()
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(state.orders, key = { it.id }) { WorkOrderCard(it) }
+            items(state.orders, key = { it.id }) { order ->
+                WorkOrderCard(order = order, onClick = { selectedOrder = order })
+            }
         }
         Intake(model)
     }
 }
 
 @Composable
-private fun WorkOrderCard(order: WorkOrder) {
-    Card(Modifier.fillMaxWidth()) {
+private fun WorkOrderCard(order: WorkOrder, onClick: () -> Unit) {
+    Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(order.workOrderNumber, fontWeight = FontWeight.Bold)
                 Text(order.priority, color = if (order.priority == "Emergency") Color.Red else Color(0xFF0D8278))
             }
             Text(order.title, style = MaterialTheme.typography.titleMedium)
-            Text("${order.location} · ${order.status}", color = Color.Gray)
+            Text("Store ${order.storeNumber} · ${order.location} · ${order.status}", color = Color.Gray)
         }
+    }
+}
+
+@Composable
+private fun WorkOrderDetail(order: WorkOrder, onBack: () -> Unit) {
+    LazyColumn(
+        Modifier.fillMaxSize().background(Color(0xFFF0F4F7)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Button(onClick = onBack) { Text("Back to work orders") }
+        }
+        item { Text(order.workOrderNumber, color = Color(0xFF0D8278), fontWeight = FontWeight.Bold) }
+        item { Text(order.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
+        item { HorizontalDivider() }
+        item { DetailRow("Store", order.storeNumber.toString()) }
+        item { DetailRow("Status", order.status) }
+        item { DetailRow("Priority", order.priority) }
+        item { DetailRow("Location", order.location) }
+        item { DetailRow("Requested by", order.requestedBy) }
+        item { DetailRow("Assigned to", order.assignedTo ?: "Not assigned") }
+        item { DetailRow("Description", order.description) }
+        order.statusNote?.takeIf { it.isNotBlank() }?.let { note ->
+            item { DetailRow("Status note", note) }
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, color = Color.Gray, style = MaterialTheme.typography.labelMedium)
+        Text(value, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
 @Composable
 private fun Intake(model: WorkOrderViewModel) {
     var expanded by remember { mutableStateOf(false) }
+    var storeNumber by remember { mutableStateOf("1") }
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var requester by remember { mutableStateOf("") }
@@ -89,6 +134,13 @@ private fun Intake(model: WorkOrderViewModel) {
         Text(if (expanded) "Close intake" else "New work order")
     }
     if (expanded) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedTextField(
+            storeNumber,
+            { value -> storeNumber = value.filter(Char::isDigit) },
+            label = { Text("Store number") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+        )
         OutlinedTextField(title, { title = it }, label = { Text("Title") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(description, { description = it }, label = { Text("Description") }, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -96,10 +148,24 @@ private fun Intake(model: WorkOrderViewModel) {
             OutlinedTextField(location, { location = it }, label = { Text("Location") }, modifier = Modifier.weight(1f))
         }
         Button(
-            enabled = listOf(title, description, requester, location).all { it.isNotBlank() },
+            enabled = storeNumber.toIntOrNull()?.let { it > 0 } == true &&
+                listOf(title, description, requester, location).all { it.isNotBlank() },
             onClick = {
-                model.create(CreateWorkOrder(title, description, requester, location)) {
-                    title = ""; description = ""; requester = ""; location = ""; expanded = false
+                model.create(
+                    CreateWorkOrder(
+                        storeNumber = storeNumber.toInt(),
+                        title = title,
+                        description = description,
+                        requestedBy = requester,
+                        location = location,
+                    )
+                ) {
+                    storeNumber = "1"
+                    title = ""
+                    description = ""
+                    requester = ""
+                    location = ""
+                    expanded = false
                 }
             },
             modifier = Modifier.fillMaxWidth(),
@@ -107,4 +173,3 @@ private fun Intake(model: WorkOrderViewModel) {
         Spacer(Modifier.height(4.dp))
     }
 }
-
