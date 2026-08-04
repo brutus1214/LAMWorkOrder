@@ -27,6 +27,13 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
             .onFailure { _state.value = QueueState(error = it.message ?: "Unable to sign in") }
     }
 
+    fun register(request: RegistrationRequest) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { api.register(request) }
+            .onSuccess { token = it.token; _state.value = QueueState(user = it.user); refresh() }
+            .onFailure { _state.value = QueueState(error = it.message ?: "Unable to create user") }
+    }
+
     fun logout() { token = null; _state.value = QueueState() }
 
     fun refresh(search: String? = null) = viewModelScope.launch {
