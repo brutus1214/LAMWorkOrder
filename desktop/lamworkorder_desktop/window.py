@@ -1,4 +1,7 @@
+from importlib.resources import files
+
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
@@ -31,9 +34,16 @@ class MainWindow(QMainWindow):
         self.resize(1150, 720)
         root = QWidget()
         layout = QVBoxLayout(root)
-        heading = QLabel("LAM Operations  ·  Work Orders")
+        brand_row = QHBoxLayout()
+        logo = QLabel()
+        pixmap = QPixmap(str(files("lamworkorder_desktop").joinpath("assets/lamart-logo.svg")))
+        logo.setPixmap(pixmap.scaled(250, 78, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        logo.setAccessibleName("LA Mart")
+        heading = QLabel("Operations  ·  Work Orders")
         heading.setObjectName("heading")
-        layout.addWidget(heading)
+        brand_row.addWidget(logo)
+        brand_row.addWidget(heading, 1)
+        layout.addLayout(brand_row)
 
         filters = QHBoxLayout()
         self.search = QLineEdit()
