@@ -19,6 +19,7 @@ import okhttp3.MediaType.Companion.toMediaType
 
 interface WorkOrderApi {
     @POST("api/auth/login") suspend fun login(@Body request: LoginRequest): LoginResponse
+    @POST("api/auth/register") suspend fun register(@Body request: RegistrationRequest): LoginResponse
     @GET("api/profile") suspend fun profile(@Header("Authorization") auth: String): User
     @PATCH("api/profile") suspend fun updateProfile(@Header("Authorization") auth: String, @Body request: ProfileUpdate): User
 
