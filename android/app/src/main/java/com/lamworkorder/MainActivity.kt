@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
-    var store by remember { mutableStateOf("1") }
+    var store by remember { mutableIntStateOf(1) }
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
 
@@ -59,7 +59,11 @@ class MainActivity : ComponentActivity() {
         if (createMode) {
             Text("New accounts start as Requester. A manager can change the role later.")
             OutlinedTextField(name, { name = it }, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(store, { store = it.filter(Char::isDigit) }, label = { Text("Store number") }, modifier = Modifier.fillMaxWidth())
+            StoreDropdown(
+                selectedStore = store,
+                onStoreSelected = { store = it },
+                modifier = Modifier.fillMaxWidth(),
+            )
             OutlinedTextField(email, { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(phone, { phone = it }, label = { Text("Phone number for texting") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(username, { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
@@ -69,12 +73,12 @@ class MainActivity : ComponentActivity() {
                 {
                     model.register(
                         RegistrationRequest(
-                            username.trim(), password, name.trim(), store.toInt(),
+                            username.trim(), password, name.trim(), store,
                             email.trim(), phone.trim(),
                         )
                     )
                 },
-                enabled = !state.loading && name.isNotBlank() && store.toIntOrNull() != null &&
+                enabled = !state.loading && name.isNotBlank() &&
                     email.isNotBlank() && phone.isNotBlank() && username.length >= 3 && password.length >= 8,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Create user and sign in") }
@@ -95,6 +99,50 @@ class MainActivity : ComponentActivity() {
             }
         }
         if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun StoreDropdown(
+    selectedStore: Int,
+    onStoreSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val stores = remember { listOf(99) + (1..9) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = !expanded },
+        modifier = modifier,
+    ) {
+        OutlinedTextField(
+            value = if (selectedStore == 99) "LA Mart 99 — All Stores" else "LA Mart $selectedStore",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Store") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier.menuAnchor().fillMaxWidth(),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            stores.forEach { storeNumber ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            if (storeNumber == 99) "LA Mart 99 — All Stores"
+                            else "LA Mart $storeNumber"
+                        )
+                    },
+                    onClick = {
+                        onStoreSelected(storeNumber)
+                        expanded = false
+                    },
+                )
+            }
+        }
     }
 }
 
