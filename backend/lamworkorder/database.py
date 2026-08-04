@@ -19,7 +19,20 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 def ensure_schema() -> None:
     """Apply small, backwards-compatible upgrades for existing local databases."""
     inspector = inspect(engine)
-    if "work_orders" not in inspector.get_table_names():
+    tables = inspector.get_table_names()
+    if "users" in tables:
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        with engine.begin() as connection:
+            if "store_number" not in user_columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE users ADD COLUMN store_number INTEGER NOT NULL DEFAULT 1"
+                )
+            if "phone_number" not in user_columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE users ADD COLUMN phone_number VARCHAR(30)"
+                )
+
+    if "work_orders" not in tables:
         return
 
     columns = {column["name"] for column in inspector.get_columns("work_orders")}
