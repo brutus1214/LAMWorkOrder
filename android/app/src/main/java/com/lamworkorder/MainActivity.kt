@@ -3,6 +3,7 @@ package com.lamworkorder
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
+import android.util.Patterns
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,9 +23,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lamworkorder.data.*
@@ -59,6 +66,12 @@ class MainActivity : ComponentActivity() {
     var store by remember { mutableIntStateOf(1) }
     var email by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
+    val emailFocus = remember { FocusRequester() }
+    val phoneFocus = remember { FocusRequester() }
+    val usernameFocus = remember { FocusRequester() }
+    val passwordFocus = remember { FocusRequester() }
+    val validEmail = email.isNotBlank() && Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()
+    val validPhone = phone.count(Char::isDigit) == 10
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -70,16 +83,73 @@ class MainActivity : ComponentActivity() {
         Text(if (createMode) "Create new user" else "Sign in", style = MaterialTheme.typography.headlineLarge)
         if (createMode) {
             Text("New accounts start as Requester. A manager can change the role later.")
-            OutlinedTextField(name, { name = it }, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Full name") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { emailFocus.requestFocus() }),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
             StoreDropdown(
                 selectedStore = store,
                 onStoreSelected = { store = it },
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(email, { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(phone, { phone = it }, label = { Text("Phone number for texting") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(username, { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(password, { password = it }, label = { Text("Password (8+ characters)") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it.trim() },
+                label = { Text("Email") },
+                supportingText = {
+                    if (email.isNotBlank() && !validEmail) Text("Enter a valid email, such as name@example.com")
+                },
+                isError = email.isNotBlank() && !validEmail,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next,
+                ),
+                keyboardActions = KeyboardActions(onNext = { phoneFocus.requestFocus() }),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().focusRequester(emailFocus),
+            )
+            OutlinedTextField(
+                value = phone,
+                onValueChange = { phone = formatUsPhone(it) },
+                label = { Text("Phone number for texting") },
+                supportingText = {
+                    if (phone.isNotBlank() && !validPhone) Text("Enter a 10-digit phone number")
+                },
+                isError = phone.isNotBlank() && !validPhone,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone,
+                    imeAction = ImeAction.Next,
+                ),
+                keyboardActions = KeyboardActions(onNext = { usernameFocus.requestFocus() }),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().focusRequester(phoneFocus),
+            )
+            OutlinedTextField(
+                value = username,
+                onValueChange = { username = it },
+                label = { Text("Username") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().focusRequester(usernameFocus),
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password (8+ characters)") },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done,
+                ),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().focusRequester(passwordFocus),
+            )
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(
                 {
@@ -91,15 +161,34 @@ class MainActivity : ComponentActivity() {
                     )
                 },
                 enabled = !state.loading && name.isNotBlank() &&
-                    email.isNotBlank() && phone.isNotBlank() && username.length >= 3 && password.length >= 8,
+                    validEmail && validPhone && username.length >= 3 && password.length >= 8,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Create user and sign in") }
             TextButton({ createMode = false }, modifier = Modifier.fillMaxWidth()) {
                 Text("Already have an account? Sign in")
             }
         } else {
-            OutlinedTextField(username, { username = it }, label = { Text("Username or email") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(password, { password = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                value = username,
+                onValueChange = { username = it },
+                label = { Text("Username or email") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done,
+                ),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().focusRequester(passwordFocus),
+            )
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(
                 { model.login(username, password) },
@@ -111,6 +200,15 @@ class MainActivity : ComponentActivity() {
             }
         }
         if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+    }
+}
+
+private fun formatUsPhone(input: String): String {
+    val digits = input.filter(Char::isDigit).take(10)
+    return when {
+        digits.length <= 3 -> digits
+        digits.length <= 6 -> "${digits.take(3)}-${digits.drop(3)}"
+        else -> "${digits.take(3)}-${digits.substring(3, 6)}-${digits.drop(6)}"
     }
 }
 
