@@ -1,4 +1,4 @@
-from sqlalchemy import func, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from .models import WorkOrder, utc_now
@@ -32,10 +32,27 @@ class WorkOrderRepository:
         return self.session.get(WorkOrder, work_order_id)
 
     def create(self, request: WorkOrderCreate):
-        count = self.session.scalar(select(func.count()).select_from(WorkOrder)) or 0
+        year = utc_now().year
+        prefix = f"WO-{request.store_number}-{year}-"
+        existing_numbers = self.session.scalars(
+            select(WorkOrder.work_order_number).where(
+                WorkOrder.work_order_number.like(f"{prefix}%")
+            )
+        )
+        sequences = []
+        for number in existing_numbers:
+            try:
+                sequences.append(int(number.removeprefix(prefix)))
+            except ValueError:
+                continue
+        next_sequence = max(sequences, default=0) + 1
+
         values = request.model_dump(mode="python")
         values["priority"] = request.priority.value
-        item = WorkOrder(work_order_number=f"WO-{utc_now():%Y}-{count + 1:04d}", **values)
+        item = WorkOrder(
+            work_order_number=f"{prefix}{next_sequence:04d}",
+            **values,
+        )
         self.session.add(item)
         self.session.commit()
         return item
