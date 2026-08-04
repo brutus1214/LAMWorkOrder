@@ -40,8 +40,8 @@ dependencies {
     implementation(libs.retrofit.kotlinx)
     implementation(libs.serialization.json)
     implementation(libs.coroutines.android)
+    implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.google.mlkit:translate:17.0.3")
     debugImplementation(libs.compose.tooling)
     testImplementation(libs.junit)
 }
-
