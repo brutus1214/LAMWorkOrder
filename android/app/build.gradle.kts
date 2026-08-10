@@ -14,9 +14,10 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "2.0.0"
+        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:5080/\"")
+        // Version 1 endpoint. This is the Android client's single server configuration.
+        buildConfigField("String", "API_BASE_URL", "\"http://50.190.210.154:5081/\"")
     }
     buildFeatures { compose = true; buildConfig = true }
     buildTypes { release { isMinifyEnabled = false } }

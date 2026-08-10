@@ -1,53 +1,42 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#10253f">
-  <title>LA Mart Work Orders</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#10253f"><title>LA Mart Work Orders</title>
   <link rel="icon" href="/assets/app-icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/app.css">
-  <script src="/assets/app.js" defer></script>
+  <link rel="stylesheet" href="/assets/app.css"><script src="/assets/app.js" defer></script>
 </head>
 <body>
-<header>
-  <div class="brand"><img src="/assets/lamart-logo.svg" alt="LA Mart"><div><span class="eyebrow">OPERATIONS</span><h1>Work orders</h1></div></div>
-  <button id="refresh" class="secondary">Refresh</button>
-</header>
-<main>
-  <section class="metrics" aria-label="Queue summary">
-    <article><span>Total</span><strong id="total">—</strong></article>
-    <article><span>Urgent</span><strong id="urgent">—</strong></article>
-    <article><span>In progress</span><strong id="progress">—</strong></article>
-  </section>
-  <section class="workspace">
-    <div class="queue card">
-      <div class="toolbar">
-        <div><h2>Active queue</h2><p id="message">Connecting to API…</p></div>
-        <input id="search" type="search" placeholder="Search number, title, location">
-        <select id="status"><option value="">All statuses</option></select>
-      </div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Number</th><th>Work</th><th>Priority</th><th>Status</th><th>Owner</th></tr></thead>
-        <tbody id="orders"></tbody>
-      </table></div>
+<section id="login-view" class="auth-shell">
+  <form id="login-form" class="card auth-card">
+    <img src="/assets/lamart-logo.svg" alt="LA Mart"><span class="eyebrow">OPERATIONS</span><h1>Sign in</h1>
+    <label>Username or email<input name="username" autocomplete="username" required></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+    <p id="login-error" class="error" role="alert"></p><button type="submit">Sign in</button>
+  </form>
+</section>
+<div id="app-view" hidden>
+  <header>
+    <div class="brand"><img src="/assets/lamart-logo.svg" alt="LA Mart"><div><span class="eyebrow">OPERATIONS</span><h1>Work orders</h1></div></div>
+    <div class="account"><span id="account-name"></span><button id="menu-button" class="icon-button" aria-label="Account menu" aria-expanded="false">&#8942;</button>
+      <div id="account-menu" class="menu" hidden><button id="manage-users" hidden>Manage Users</button><button id="profile-button">Profile</button><button id="logout-button">Logout</button></div>
     </div>
-    <form id="create-form" class="card">
-      <div><span class="eyebrow">INTAKE</span><h2>New work order</h2></div>
-      <label>Title<input name="title" required maxlength="120"></label>
-      <label>Description<textarea name="description" required maxlength="2000"></textarea></label>
-      <div class="pair">
-        <label>Requested by<input name="requestedBy" required maxlength="120"></label>
-        <label>Location<input name="location" required maxlength="160"></label>
+  </header>
+  <main>
+    <section class="metrics"><article><span>Total</span><strong id="total">—</strong></article><article><span>Urgent</span><strong id="urgent">—</strong></article><article><span>In progress</span><strong id="progress">—</strong></article></section>
+    <section class="workspace">
+      <div class="queue card"><div class="toolbar"><div><h2>Active queue</h2><p id="message"></p></div><input id="search" type="search" placeholder="Search number, title, location"><button id="refresh" class="secondary">Refresh</button></div>
+        <div id="filters" class="filters"><button data-filter="All" class="active">All</button><button data-filter="New">New</button><button data-filter="Open">Open/In Progress</button><button data-filter="Completed">Completed</button><button data-filter="Closed">Closed/Cancelled</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Number</th><th>Work</th><th>Priority</th><th>Status</th><th>Owner</th></tr></thead><tbody id="orders"></tbody></table></div>
       </div>
-      <div class="pair">
-        <label>Priority<select name="priority"><option>Normal</option><option>Low</option><option>High</option><option>Emergency</option></select></label>
-        <label>Assigned to<input name="assignedTo" maxlength="120"></label>
-      </div>
-      <button type="submit">Create work order</button>
-    </form>
-  </section>
-</main>
-</body>
-</html>
-
+      <form id="create-form" class="card intake"><div><span class="eyebrow">INTAKE</span><h2>New work order</h2></div>
+        <label>Store<select name="storeNumber" id="store"></select></label><label>Title<input name="title" required maxlength="120"></label><label>Description<textarea name="description" required maxlength="2000"></textarea></label>
+        <label>Requested by<input id="requested-by" readonly></label><label>Location<input name="location" required maxlength="160"></label>
+        <label>Priority<select name="priority"><option>Normal</option><option>Low</option><option>High</option><option>Emergency</option></select></label><label>Assigned to<input name="assignedTo" maxlength="120"></label>
+        <label>Pictures or videos<input name="attachments" type="file" accept="image/*,video/*" multiple></label><button type="submit">Create work order</button>
+      </form>
+    </section>
+  </main>
+</div>
+<dialog id="profile-dialog"><form id="profile-form" method="dialog"><h2>Profile</h2><p id="profile-meta"></p><label>Display name<input name="displayName" required maxlength="120"></label><label>Email<input name="email" type="email" maxlength="254"></label><p id="profile-error" class="error"></p><div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button value="default" type="submit">Save</button></div></form></dialog>
+</body></html>

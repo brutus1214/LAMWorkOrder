@@ -67,16 +67,16 @@ Open PowerShell and run:
 ```powershell
 cd C:\JC_SW\LAMWorkOrder
 .\.venv\Scripts\Activate.ps1
-python -m uvicorn lamworkorder.main:app --host 0.0.0.0 --port 5080 --reload
+python -m uvicorn lamworkorder.main:app --host 0.0.0.0 --port 5081 --reload
 ```
 
 Keep this PowerShell window open. The backend stops if you close it.
 
 Open these addresses in Chrome:
 
-- Web dashboard: <http://localhost:5080>
-- Interactive API documentation: <http://localhost:5080/docs>
-- API schema: <http://localhost:5080/openapi.json>
+- Web dashboard: <http://localhost:5081>
+- Interactive API documentation: <http://localhost:5081/docs>
+- API schema: <http://localhost:5081/openapi.json>
 
 The SQLite database file `lamworkorder.db` is created automatically in the project folder.
 
@@ -115,13 +115,13 @@ lamworkorder-desktop
 8. Select the emulator at the top of Android Studio.
 9. Press the green **Run** button.
 
-The Android emulator is already configured to call:
+The current Version 1 Android client is configured in `android/app/build.gradle.kts` to call:
 
 ```text
-http://10.0.2.2:5080/
+http://50.190.210.154:5081/
 ```
 
-Do not change it to `localhost`. Inside an emulator, `localhost` means the emulator itself. `10.0.2.2` connects to the Windows computer.
+Keep the final slash when changing this address for a development environment.
 
 ## 7. Run on a physical Android phone or Z Fold
 
@@ -144,13 +144,13 @@ android\app\build.gradle.kts
 Change:
 
 ```kotlin
-buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:5080/\"")
+buildConfigField("String", "API_BASE_URL", "\"http://50.190.210.154:5081/\"")
 ```
 
 to your computer's address, for example:
 
 ```kotlin
-buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.50:5080/\"")
+buildConfigField("String", "API_BASE_URL", "\"http://192.168.1.50:5081/\"")
 ```
 
 Keep the final slash. Then click **Sync Project with Gradle Files**.
@@ -164,24 +164,32 @@ On the phone:
 5. Select the phone in Android Studio.
 6. Press **Run**.
 
-The backend must use `--host 0.0.0.0`, as shown above. Allow Python or port `5080` through Windows Firewall when prompted.
+The backend must use `--host 0.0.0.0`, as shown above. Allow Python or port `5081` through Windows Firewall when prompted.
 
 To test the network before running the app, open this address in the phone's browser, replacing the example IP:
 
 ```text
-http://192.168.1.50:5080/docs
+http://192.168.1.50:5081/docs
 ```
 
 If the API documentation opens on the phone, the connection is working.
 
-## 8. Backend addresses
+## 8. Backend versions and addresses
+
+The reserved backend ports are:
+
+| Backend version | Port |
+| --- | ---: |
+| Legacy | `5080` |
+| Version 1 (current) | `5081` |
+| Version 2 | `5082` |
 
 | Client | Backend address |
 | --- | --- |
-| Web browser on the Windows computer | `http://localhost:5080` |
-| Windows desktop app | `http://localhost:5080` |
-| Android Studio emulator | `http://10.0.2.2:5080/` |
-| Physical Android phone | `http://YOUR-PC-IP:5080/` |
+| Web browser on the Windows computer | `http://localhost:5081` |
+| Windows desktop app | `http://50.190.210.154:5081` |
+| Android Version 1 client | `http://50.190.210.154:5081/` |
+| Local development override | `http://YOUR-PC-IP:5081/` |
 
 ## 9. Run tests
 
@@ -207,7 +215,7 @@ Each time you work on the project:
 
 1. Start the backend in PowerShell.
 2. Keep that window open.
-3. Open <http://localhost:5080> for the web dashboard.
+3. Open <http://localhost:5081> for the web dashboard.
 4. Start the Windows desktop app in a second PowerShell window, if needed.
 5. Open the `android` folder in Android Studio and run the Android app.
 
@@ -216,7 +224,7 @@ Backend:
 ```powershell
 cd C:\JC_SW\LAMWorkOrder
 .\.venv\Scripts\Activate.ps1
-python -m uvicorn lamworkorder.main:app --host 0.0.0.0 --port 5080 --reload
+python -m uvicorn lamworkorder.main:app --host 0.0.0.0 --port 5081 --reload
 ```
 
 Windows app:
@@ -239,12 +247,12 @@ cd C:\JC_SW\LAMWorkOrder
 pip install -e ".[dev,desktop]"
 ```
 
-### Port 5080 is already in use
+### Port 5081 is already in use
 
 An older backend may still be running. Close its PowerShell window, or find the process:
 
 ```powershell
-netstat -ano | findstr :5080
+netstat -ano | findstr :5081
 ```
 
 ### Android shows a network error
@@ -252,10 +260,10 @@ netstat -ano | findstr :5080
 Check all of these:
 
 - The backend PowerShell window is still running.
-- The emulator uses `http://10.0.2.2:5080/`.
-- A physical phone uses the computer's current IPv4 address.
+- Version 1 uses `http://50.190.210.154:5081/` unless you intentionally set a local development override.
+- A physical phone using a local override uses the computer's current IPv4 address.
 - The phone and computer are on the same network.
-- Windows Firewall allows port `5080`.
+- Windows Firewall allows port `5081`.
 - The URL ends with `/`.
 
 ### Gradle Sync fails

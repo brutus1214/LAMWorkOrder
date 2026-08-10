@@ -45,7 +45,7 @@ async def lifespan(_: FastAPI):
 
 
 def create_app() -> FastAPI:
-    application = FastAPI(title="LAMWorkOrder API", version="2.1.0", lifespan=lifespan)
+    application = FastAPI(title="LAMWorkOrder API", version="1.0.0", lifespan=lifespan)
     application.include_router(router)
     application.mount("/assets", StaticFiles(directory=WEB / "assets"), name="assets")
 

@@ -308,7 +308,7 @@ private fun formatUsPhone(input: String): String {
             "New" -> order.status == "New"
             "Open/In Progress" -> order.status in listOf("Scheduled", "InProgress", "Blocked")
             "Completed" -> order.status == "Completed"
-            "Closed" -> order.status == "Cancelled"
+            "Closed/Cancelled" -> order.status == "Cancelled"
             else -> true
         }}.sortedWith(compareBy<WorkOrder> { when (it.status) {
             "New" -> 0; "Scheduled" -> 1; "InProgress" -> 2; "Blocked" -> 3
@@ -334,7 +334,7 @@ private fun formatUsPhone(input: String): String {
         */
         Row{OutlinedTextField(search,{search=it},label={Text("Search")},modifier=Modifier.weight(1f));Button({model.refresh(search)}){Text("Go")}}
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("All", "New", "Open/In Progress", "Completed", "Closed").forEach { option ->
+            listOf("All", "New", "Open/In Progress", "Completed", "Closed/Cancelled").forEach { option ->
                 FilterChip(selected = filter == option, onClick = { filter = option }, label = { Text(option) })
             }
         }
