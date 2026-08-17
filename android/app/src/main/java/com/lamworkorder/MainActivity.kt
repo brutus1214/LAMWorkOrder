@@ -639,19 +639,31 @@ private fun formatUsPhone(input: String): String {
     var location by remember { mutableStateOf("") }
     var priority by remember { mutableStateOf("Normal") }
     var attachments by remember { mutableStateOf<List<MultipartBody.Part>>(emptyList()) }
+    var captureUri by remember { mutableStateOf<Uri?>(null) }
     val context = LocalContext.current
+    fun uriToPart(uri: Uri): MultipartBody.Part? = context.contentResolver.openInputStream(uri)?.use { input ->
+        val bytes = input.readBytes()
+        val type = context.contentResolver.getType(uri) ?: "application/octet-stream"
+        val extension = if (type.startsWith("video/")) "mp4" else if (type.startsWith("image/")) "jpg" else "bin"
+        MultipartBody.Part.createFormData(
+            "files",
+            "attachment_${System.currentTimeMillis()}.$extension",
+            bytes.toRequestBody(type.toMediaType()),
+        )
+    }
+    fun newCaptureUri(extension: String): Uri {
+        val directory = File(context.cacheDir, "captured_media").apply { mkdirs() }
+        val file = File.createTempFile("work_order_", ".$extension", directory)
+        return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris: List<Uri> ->
-        attachments = uris.mapNotNull { uri ->
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                val bytes = input.readBytes()
-                val type = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                MultipartBody.Part.createFormData(
-                    "files",
-                    uri.lastPathSegment ?: "attachment",
-                    bytes.toRequestBody(type.toMediaType()),
-                )
-            }
-        }
+        attachments = attachments + uris.mapNotNull(::uriToPart)
+    }
+    val photoCapture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        if (saved) captureUri?.let(::uriToPart)?.let { attachments = attachments + it }
+    }
+    val videoCapture = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { saved ->
+        if (saved) captureUri?.let(::uriToPart)?.let { attachments = attachments + it }
     }
 
     Scaffold(
@@ -679,11 +691,18 @@ private fun formatUsPhone(input: String): String {
         )
         Field("Location", location, { location = it }, true)
         SelectionField("Priority", priority, listOf("Low", "Normal", "High", "Emergency"), { priority = it }, true)
-        OutlinedButton(
-            { picker.launch(arrayOf("image/*", "video/*")) },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(if (attachments.isEmpty()) "Add pictures or videos" else "${attachments.size} attachment(s) selected")
+        Text(
+            if (attachments.isEmpty()) "Add photos or videos" else "${attachments.size} attachment(s) selected",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Button({ captureUri = newCaptureUri("jpg"); photoCapture.launch(captureUri!!) }, Modifier.fillMaxWidth()) {
+            Text("Take photo")
+        }
+        Button({ captureUri = newCaptureUri("mp4"); videoCapture.launch(captureUri!!) }, Modifier.fillMaxWidth()) {
+            Text("Record video")
+        }
+        OutlinedButton({ picker.launch(arrayOf("image/*", "video/*")) }, Modifier.fillMaxWidth()) {
+            Text("Choose from device")
         }
         /* Create action moved to the fixed bottom bar.
         Button(
