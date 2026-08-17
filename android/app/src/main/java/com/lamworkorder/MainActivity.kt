@@ -5,6 +5,8 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Patterns
 import android.os.Bundle
+import android.widget.MediaController
+import android.widget.VideoView
 import androidx.core.content.FileProvider
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -23,12 +25,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -432,7 +436,9 @@ private fun formatUsPhone(input: String): String {
     val photoCapture=rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()){saved->if(saved)captureUri?.let{uploadUris(listOf(it))}}
     val videoCapture=rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()){saved->if(saved)captureUri?.let{uploadUris(listOf(it))}}
     LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){item{Button(back){Text("Back")}};item{Text(o.workOrderNumber,fontWeight=FontWeight.Bold)}
-        item{OutlinedTextField(value="LA Mart ${o.storeNumber}",onValueChange={},readOnly=true,label={Text("Store")},supportingText={Text("Set when work order was created")},modifier=Modifier.fillMaxWidth())};item{Field("Title",title,{title=it},full)};item{Field("Description",description,{description=it},full)};item{Field("Requested by",requester,{requester=it},full)};item{Field("Location",location,{location=it},full)}
+        item{OutlinedTextField(value="LA Mart ${o.storeNumber}",onValueChange={},readOnly=true,label={Text("Store")},supportingText={Text("Set when work order was created")},modifier=Modifier.fillMaxWidth())};item{Field("Title",title,{title=it},full)};item{Field("Description",description,{description=it},full)}
+        if(o.attachments.isNotEmpty())item{AttachmentGallery(model,o.attachments)}
+        item{Field("Requested by",requester,{requester=it},full)};item{Field("Location",location,{location=it},full)}
         item{SelectionField("Priority",priority,listOf("Low","Normal","High","Emergency"),{priority=it},full)}
         item{Field("Assigned to",assigned,{assigned=it},full)}
         item{SelectionField("Status",status,listOf("New","Scheduled","InProgress","Blocked","Completed","Cancelled"),{status=it},statusEdit) { if(it=="InProgress") "In Progress" else it }}
@@ -447,7 +453,64 @@ private fun formatUsPhone(input: String): String {
                 OutlinedButton({picker.launch(arrayOf("image/*","video/*"))},Modifier.fillMaxWidth()){Text("Choose from device")}
             }
         }
-        item{Text("Attachments",style=MaterialTheme.typography.titleMedium)};items(o.attachments){a->Text("${a.originalName} (${a.sizeBytes/1024} KB)")}
+    }
+}
+
+@Composable private fun AttachmentGallery(model: WorkOrderViewModel, attachments: List<Attachment>) {
+    val initial = attachments.firstOrNull { it.contentType.startsWith("image/") } ?: attachments.first()
+    var selected by remember(attachments) { mutableStateOf(initial) }
+    var mediaBytes by remember(selected.id) { mutableStateOf<ByteArray?>(null) }
+    var loadError by remember(selected.id) { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+
+    LaunchedEffect(selected.id) {
+        mediaBytes = null
+        loadError = null
+        runCatching { model.attachmentBytes(selected.id) }
+            .onSuccess { mediaBytes = it }
+            .onFailure { loadError = "Unable to load ${selected.originalName}" }
+    }
+
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Photos and videos", style = MaterialTheme.typography.titleMedium)
+        when {
+            loadError != null -> Text(loadError!!, color = MaterialTheme.colorScheme.error)
+            mediaBytes == null -> LinearProgressIndicator(Modifier.fillMaxWidth())
+            selected.contentType.startsWith("image/") -> {
+                val bitmap = remember(mediaBytes) { BitmapFactory.decodeByteArray(mediaBytes, 0, mediaBytes!!.size) }
+                if (bitmap != null) Image(
+                    bitmap.asImageBitmap(),
+                    contentDescription = selected.originalName,
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Fit,
+                )
+            }
+            selected.contentType.startsWith("video/") -> {
+                val videoFile = remember(selected.id, mediaBytes) {
+                    File(context.cacheDir, "preview_${selected.id}.mp4").apply { writeBytes(mediaBytes!!) }
+                }
+                AndroidView(
+                    factory = { videoContext -> VideoView(videoContext).apply {
+                        val controls = MediaController(videoContext)
+                        controls.setAnchorView(this)
+                        setMediaController(controls)
+                        setVideoPath(videoFile.absolutePath)
+                        setOnPreparedListener { seekTo(1) }
+                    } },
+                    modifier = Modifier.fillMaxWidth().height(260.dp),
+                )
+            }
+            else -> Text("Preview unavailable for ${selected.originalName}")
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            attachments.forEachIndexed { index, attachment ->
+                FilterChip(
+                    selected = attachment.id == selected.id,
+                    onClick = { selected = attachment },
+                    label = { Text(if (attachment.contentType.startsWith("video/")) "Video ${index + 1}" else "Photo ${index + 1}") },
+                )
+            }
+        }
     }
 }
 

@@ -93,6 +93,8 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.message) }
     }
 
+    suspend fun attachmentBytes(id: String): ByteArray = api.attachmentContent(auth(), id).bytes()
+
     private fun perform(block: suspend () -> WorkOrder, done: () -> Unit) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching { block() }

@@ -15,6 +15,7 @@ import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import okhttp3.MediaType.Companion.toMediaType
 
 interface WorkOrderApi {
@@ -39,6 +40,7 @@ interface WorkOrderApi {
     @PUT("api/work-orders/{id}") suspend fun update(@Header("Authorization") auth: String, @Path("id") id: String, @Body request: UpdateWorkOrder): WorkOrder
     @PATCH("api/work-orders/{id}/status") suspend fun updateStatus(@Header("Authorization") auth: String, @Path("id") id: String, @Body request: StatusUpdate): WorkOrder
     @Multipart @POST("api/work-orders/{id}/attachments") suspend fun upload(@Header("Authorization") auth: String, @Path("id") id: String, @Part files: List<MultipartBody.Part>): List<Attachment>
+    @GET("api/attachments/{id}/content") suspend fun attachmentContent(@Header("Authorization") auth: String, @Path("id") id: String): ResponseBody
 
     companion object {
         fun create(): WorkOrderApi {
