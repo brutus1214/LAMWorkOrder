@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Base64
 import android.util.Patterns
 import android.os.Bundle
+import androidx.core.content.FileProvider
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -49,6 +50,7 @@ import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
 import kotlinx.coroutines.delay
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { MaterialTheme { WorkOrderApp() } } }
@@ -411,7 +413,25 @@ private fun formatUsPhone(input: String): String {
     val full=user.role in listOf("Admin","Manager"); val statusEdit=full||user.role=="Technician"
     var title by remember{mutableStateOf(o.title)};var description by remember{mutableStateOf(o.description)};var requester by remember{mutableStateOf(o.requestedBy)};var location by remember{mutableStateOf(o.location)};var priority by remember{mutableStateOf(o.priority)};var assigned by remember{mutableStateOf(o.assignedTo.orEmpty())};var status by remember{mutableStateOf(o.status)};var note by remember{mutableStateOf(o.statusNote.orEmpty())}
     val context=LocalContext.current
-    val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()){uris:List<Uri>->val parts=uris.mapNotNull{uri->context.contentResolver.openInputStream(uri)?.use{input->val bytes=input.readBytes();val type=context.contentResolver.getType(uri)?:"application/octet-stream";MultipartBody.Part.createFormData("files","attachment",bytes.toRequestBody(type.toMediaType()))}};if(parts.isNotEmpty())model.upload(o.id,parts,back)}
+    var mediaMenuOpen by remember { mutableStateOf(false) }
+    var captureUri by remember { mutableStateOf<Uri?>(null) }
+    fun uploadUris(uris: List<Uri>) {
+        val parts=uris.mapNotNull{uri->context.contentResolver.openInputStream(uri)?.use{input->
+            val bytes=input.readBytes()
+            val type=context.contentResolver.getType(uri)?:"application/octet-stream"
+            val extension=if(type.startsWith("video/")) "mp4" else if(type.startsWith("image/")) "jpg" else "bin"
+            MultipartBody.Part.createFormData("files","attachment_${System.currentTimeMillis()}.$extension",bytes.toRequestBody(type.toMediaType()))
+        }}
+        if(parts.isNotEmpty())model.upload(o.id,parts,back)
+    }
+    fun newCaptureUri(extension: String): Uri {
+        val directory=File(context.cacheDir,"captured_media").apply { mkdirs() }
+        val file=File.createTempFile("work_order_", ".$extension", directory)
+        return FileProvider.getUriForFile(context,"${context.packageName}.fileprovider",file)
+    }
+    val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()){uris:List<Uri>->uploadUris(uris)}
+    val photoCapture=rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()){saved->if(saved)captureUri?.let{uploadUris(listOf(it))}}
+    val videoCapture=rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()){saved->if(saved)captureUri?.let{uploadUris(listOf(it))}}
     LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){item{Button(back){Text("Back")}};item{Text(o.workOrderNumber,fontWeight=FontWeight.Bold)}
         item{OutlinedTextField(value="LA Mart ${o.storeNumber}",onValueChange={},readOnly=true,label={Text("Store")},supportingText={Text("Set when work order was created")},modifier=Modifier.fillMaxWidth())};item{Field("Title",title,{title=it},full)};item{Field("Description",description,{description=it},full)};item{Field("Requested by",requester,{requester=it},full)};item{Field("Location",location,{location=it},full)}
         item{SelectionField("Priority",priority,listOf("Low","Normal","High","Emergency"),{priority=it},full)}
@@ -420,7 +440,14 @@ private fun formatUsPhone(input: String): String {
         item{Field("Status note",note,{note=it},statusEdit)}
         if(full)item{Button({model.update(o.id,UpdateWorkOrder(o.storeNumber,title,description,requester,location,priority,assigned.ifBlank{null},o.dueAt,status,note.ifBlank{null}),back)}){Text("Save all details")}}
         else if(statusEdit)item{Button({model.updateStatus(o.id,status,note,back)}){Text("Save status")}}
-        if(statusEdit)item{Button({picker.launch(arrayOf("image/*","video/*"))}){Text("Add photos or videos")}}
+        if(statusEdit)item{
+            Button({mediaMenuOpen=true}){Text("Add photos or videos")}
+            DropdownMenu(expanded=mediaMenuOpen,onDismissRequest={mediaMenuOpen=false}){
+                DropdownMenuItem(text={Text("Take photo")},onClick={mediaMenuOpen=false;captureUri=newCaptureUri("jpg");photoCapture.launch(captureUri!!)})
+                DropdownMenuItem(text={Text("Record video")},onClick={mediaMenuOpen=false;captureUri=newCaptureUri("mp4");videoCapture.launch(captureUri!!)})
+                DropdownMenuItem(text={Text("Choose from device")},onClick={mediaMenuOpen=false;picker.launch(arrayOf("image/*","video/*"))})
+            }
+        }
         item{Text("Attachments",style=MaterialTheme.typography.titleMedium)};items(o.attachments){a->Text("${a.originalName} (${a.sizeBytes/1024} KB)")}
     }
 }

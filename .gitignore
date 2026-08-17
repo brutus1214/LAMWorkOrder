@@ -9,6 +9,7 @@ __pycache__/
 *.sqlite3
 .idea/
 .gradle/
+.kotlin/
 android/local.properties
 android/**/build/
 dist/
