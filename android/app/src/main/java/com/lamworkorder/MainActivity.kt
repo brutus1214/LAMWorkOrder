@@ -413,7 +413,6 @@ private fun formatUsPhone(input: String): String {
     val full=user.role in listOf("Admin","Manager"); val statusEdit=full||user.role=="Technician"
     var title by remember{mutableStateOf(o.title)};var description by remember{mutableStateOf(o.description)};var requester by remember{mutableStateOf(o.requestedBy)};var location by remember{mutableStateOf(o.location)};var priority by remember{mutableStateOf(o.priority)};var assigned by remember{mutableStateOf(o.assignedTo.orEmpty())};var status by remember{mutableStateOf(o.status)};var note by remember{mutableStateOf(o.statusNote.orEmpty())}
     val context=LocalContext.current
-    var mediaMenuOpen by remember { mutableStateOf(false) }
     var captureUri by remember { mutableStateOf<Uri?>(null) }
     fun uploadUris(uris: List<Uri>) {
         val parts=uris.mapNotNull{uri->context.contentResolver.openInputStream(uri)?.use{input->
@@ -441,11 +440,11 @@ private fun formatUsPhone(input: String): String {
         if(full)item{Button({model.update(o.id,UpdateWorkOrder(o.storeNumber,title,description,requester,location,priority,assigned.ifBlank{null},o.dueAt,status,note.ifBlank{null}),back)}){Text("Save all details")}}
         else if(statusEdit)item{Button({model.updateStatus(o.id,status,note,back)}){Text("Save status")}}
         if(statusEdit)item{
-            Button({mediaMenuOpen=true}){Text("Add photos or videos")}
-            DropdownMenu(expanded=mediaMenuOpen,onDismissRequest={mediaMenuOpen=false}){
-                DropdownMenuItem(text={Text("Take photo")},onClick={mediaMenuOpen=false;captureUri=newCaptureUri("jpg");photoCapture.launch(captureUri!!)})
-                DropdownMenuItem(text={Text("Record video")},onClick={mediaMenuOpen=false;captureUri=newCaptureUri("mp4");videoCapture.launch(captureUri!!)})
-                DropdownMenuItem(text={Text("Choose from device")},onClick={mediaMenuOpen=false;picker.launch(arrayOf("image/*","video/*"))})
+            Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+                Text("Add photos or videos",style=MaterialTheme.typography.titleMedium)
+                Button({captureUri=newCaptureUri("jpg");photoCapture.launch(captureUri!!)},Modifier.fillMaxWidth()){Text("Take photo")}
+                Button({captureUri=newCaptureUri("mp4");videoCapture.launch(captureUri!!)},Modifier.fillMaxWidth()){Text("Record video")}
+                OutlinedButton({picker.launch(arrayOf("image/*","video/*"))},Modifier.fillMaxWidth()){Text("Choose from device")}
             }
         }
         item{Text("Attachments",style=MaterialTheme.typography.titleMedium)};items(o.attachments){a->Text("${a.originalName} (${a.sizeBytes/1024} KB)")}
