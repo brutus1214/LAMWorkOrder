@@ -1,7 +1,7 @@
 const $ = (id) => document.getElementById(id);
 const statusRank = {New: 0, Scheduled: 1, InProgress: 2, Blocked: 3, Completed: 4, Cancelled: 5};
 const allMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
-let token = sessionStorage.getItem("lamworkorder.token"); let user = null; let orders = []; let filter = "All";
+let token = sessionStorage.getItem("lamworkorder.token"); let user = null; let orders = []; let filter = "New";
 const label = (value) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 async function api(path, options = {}) {

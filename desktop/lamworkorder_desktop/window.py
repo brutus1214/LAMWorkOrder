@@ -100,6 +100,7 @@ class MainWindow(QMainWindow):
         self.search.setPlaceholderText("Search number, title, location")
         self.status = QComboBox()
         self.status.addItems(FILTERS)
+        self.status.setCurrentText("New")
         refresh = QPushButton("Refresh")
         refresh.clicked.connect(self.load_orders)
         filters.addWidget(self.search, 1)

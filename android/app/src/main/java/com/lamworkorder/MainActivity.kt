@@ -311,7 +311,7 @@ private fun formatUsPhone(input: String): String {
 @Composable private fun Queue(model: WorkOrderViewModel, state: QueueState, select:(WorkOrder)->Unit, showProfile:()->Unit, showUsers:()->Unit) {
     val currentUser = state.user ?: return
     var search by remember { mutableStateOf("") }
-    var filter by remember { mutableStateOf("All") }
+    var filter by remember { mutableStateOf("New") }
     var menuOpen by remember { mutableStateOf(false) }
     var intakeOpen by remember { mutableStateOf(false) }
     LaunchedEffect(currentUser.id) {
