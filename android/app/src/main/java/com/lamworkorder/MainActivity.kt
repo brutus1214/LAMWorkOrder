@@ -56,7 +56,6 @@ import com.google.mlkit.common.model.DownloadConditions
 import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.Translation
-import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -933,30 +932,13 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
     var translatedText by remember(value) { mutableStateOf<String?>(null) }
     var translating by remember { mutableStateOf(false) }
     var translationError by remember { mutableStateOf<String?>(null) }
+    var translationMenuOpen by remember { mutableStateOf(false) }
 
     val languageIdentifier = remember { LanguageIdentification.getClient() }
 
-    val englishToSpanish = remember {
-        Translation.getClient(
-            TranslatorOptions.Builder()
-                .setSourceLanguage(TranslateLanguage.ENGLISH)
-                .setTargetLanguage(TranslateLanguage.SPANISH)
-                .build()
-        )
-    }
-    val spanishToEnglish = remember {
-        Translation.getClient(
-            TranslatorOptions.Builder()
-                .setSourceLanguage(TranslateLanguage.SPANISH)
-                .setTargetLanguage(TranslateLanguage.ENGLISH)
-                .build()
-        )
-    }
-    DisposableEffect(languageIdentifier, englishToSpanish, spanishToEnglish) {
+    DisposableEffect(languageIdentifier) {
         onDispose {
             languageIdentifier.close()
-            englishToSpanish.close()
-            spanishToEnglish.close()
         }
     }
 
@@ -967,11 +949,25 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
         }
     }
 
-    fun runTranslation(translator: Translator) {
-        if (value.isBlank()) {
-            translating = false
-            return
+    fun supportedSourceLanguage(languageCode: String): String =
+        when (languageCode) {
+            TranslateLanguage.SPANISH -> TranslateLanguage.SPANISH
+            TranslateLanguage.KOREAN -> TranslateLanguage.KOREAN
+            else -> TranslateLanguage.ENGLISH
         }
+
+    fun runTranslation(sourceLanguage: String, requestedTargetLanguage: String) {
+        val targetLanguage = if (sourceLanguage == requestedTargetLanguage) {
+            TranslateLanguage.ENGLISH
+        } else {
+            requestedTargetLanguage
+        }
+        val translator = Translation.getClient(
+            TranslatorOptions.Builder()
+                .setSourceLanguage(sourceLanguage)
+                .setTargetLanguage(targetLanguage)
+                .build()
+        )
         val conditions = DownloadConditions.Builder().build()
         translator.downloadModelIfNeeded(conditions)
             .continueWithTask { translator.translate(value) }
@@ -983,21 +979,19 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
                 translationError = "Translation unavailable. Check internet once to download the language model."
                 translating = false
             }
+            .addOnCompleteListener {
+                translator.close()
+            }
     }
 
-    fun detectAndTranslate() {
+    fun detectAndTranslate(targetLanguage: String) {
         if (value.isBlank() || translating) return
         translating = true
         translatedText = null
         translationError = null
         languageIdentifier.identifyLanguage(value)
             .addOnSuccessListener { languageCode ->
-                val translator = if (languageCode == "es") {
-                    spanishToEnglish
-                } else {
-                    englishToSpanish
-                }
-                runTranslation(translator)
+                runTranslation(supportedSourceLanguage(languageCode), targetLanguage)
             }
             .addOnFailureListener {
                 translationError = "Could not detect the language."
@@ -1012,11 +1006,32 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
             label = { Text(label) },
             enabled = enabled,
             trailingIcon = {
-                IconButton(
-                    onClick = { detectAndTranslate() },
-                    enabled = value.isNotBlank() && !translating,
-                ) {
-                    Text("🌐", style = MaterialTheme.typography.titleMedium)
+                Box {
+                    IconButton(
+                        onClick = { translationMenuOpen = true },
+                        enabled = value.isNotBlank() && !translating,
+                    ) {
+                        Text("🌐", style = MaterialTheme.typography.titleMedium)
+                    }
+                    DropdownMenu(
+                        expanded = translationMenuOpen,
+                        onDismissRequest = { translationMenuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Spanish") },
+                            onClick = {
+                                translationMenuOpen = false
+                                detectAndTranslate(TranslateLanguage.SPANISH)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Korean") },
+                            onClick = {
+                                translationMenuOpen = false
+                                detectAndTranslate(TranslateLanguage.KOREAN)
+                            },
+                        )
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth(),
