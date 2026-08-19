@@ -11,7 +11,9 @@ import okhttp3.MultipartBody
 
 data class QueueState(
     val orders: List<WorkOrder> = emptyList(), val user: User? = null,
-    val users: List<User> = emptyList(), val loading: Boolean = false, val error: String? = null,
+    val users: List<User> = emptyList(), val technicians: List<User> = emptyList(),
+    val notificationRecipients: List<User> = emptyList(),
+    val loading: Boolean = false, val error: String? = null,
 )
 
 class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) : ViewModel() {
@@ -23,14 +25,14 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
     fun login(username: String, password: String) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching { api.login(LoginRequest(username.trim(), password)) }
-            .onSuccess { token = it.token; _state.value = QueueState(user = it.user); refresh() }
+            .onSuccess { token = it.token; _state.value = QueueState(user = it.user); refresh(); loadTechnicians() }
             .onFailure { _state.value = QueueState(error = it.message ?: "Unable to sign in") }
     }
 
     fun register(request: RegistrationRequest) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching { api.register(request) }
-            .onSuccess { token = it.token; _state.value = QueueState(user = it.user); refresh() }
+            .onSuccess { token = it.token; _state.value = QueueState(user = it.user); refresh(); loadTechnicians() }
             .onFailure { _state.value = QueueState(error = it.message ?: "Unable to create user") }
     }
 
@@ -47,19 +49,50 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
     fun create(
         request: CreateWorkOrder,
         attachments: List<MultipartBody.Part> = emptyList(),
-        done: () -> Unit,
+        done: (WorkOrder) -> Unit,
+        failed: () -> Unit = {},
     ) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching {
             val created = api.create(auth(), request)
-            if (attachments.isNotEmpty()) api.upload(auth(), created.id, attachments)
-            created
+            val uploaded = if (attachments.isNotEmpty()) {
+                runCatching { api.upload(auth(), created.id, attachments) }
+            } else {
+                Result.success(emptyList())
+            }
+            created.copy(attachments = uploaded.getOrDefault(emptyList())) to uploaded.exceptionOrNull()
         }
-            .onSuccess { refresh(); done() }
-            .onFailure { _state.value = _state.value.copy(loading = false, error = it.message) }
+            .onSuccess { (created, attachmentError) ->
+                _state.value = _state.value.copy(
+                    loading = false,
+                    error = attachmentError?.let { "Work order created, but attachments failed to upload." },
+                )
+                done(created)
+                refresh()
+            }
+            .onFailure {
+                _state.value = _state.value.copy(loading = false, error = it.message)
+                failed()
+            }
     }
     fun update(id: String, request: UpdateWorkOrder, done: () -> Unit) = perform({ api.update(auth(), id, request) }, done)
     fun updateStatus(id: String, status: String, note: String?, done: () -> Unit) = perform({ api.updateStatus(auth(), id, StatusUpdate(status, note)) }, done)
+
+    fun deleteWorkOrder(id: String, done: () -> Unit) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching {
+            val response = api.deleteWorkOrder(auth(), id)
+            if (!response.isSuccessful) error("Unable to delete work order")
+        }
+            .onSuccess {
+                _state.value = _state.value.copy(loading = false)
+                done()
+                refresh()
+            }
+            .onFailure {
+                _state.value = _state.value.copy(loading = false, error = it.message)
+            }
+    }
 
     fun updateProfile(name: String, email: String?, done: () -> Unit) = viewModelScope.launch {
         runCatching { api.updateProfile(auth(), ProfileUpdate(name, email?.takeIf(String::isNotBlank))) }
@@ -91,6 +124,23 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
         runCatching { api.upload(auth(), id, parts) }
             .onSuccess { refresh(); done() }
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.message) }
+    }
+
+    fun loadTechnicians() = viewModelScope.launch {
+        if (token == null) return@launch
+        runCatching { api.technicians(auth()) }
+            .onSuccess { _state.value = _state.value.copy(technicians = it) }
+            .onFailure {
+                _state.value = _state.value.copy(
+                    error = "Unable to load technicians. Restart the backend, then tap Refresh.",
+                )
+            }
+    }
+
+    fun loadNotificationRecipients(storeNumber: Int) = viewModelScope.launch {
+        if (token == null) return@launch
+        runCatching { api.notificationRecipients(auth(), storeNumber) }
+            .onSuccess { _state.value = _state.value.copy(notificationRecipients = it) }
     }
 
     suspend fun attachmentBytes(id: String): ByteArray = api.attachmentContent(auth(), id).bytes()

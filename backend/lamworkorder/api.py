@@ -136,6 +136,41 @@ def list_users(
     return list(session.scalars(statement))
 
 
+@router.get("/api/technicians", response_model=list[UserRead], tags=["work orders"])
+def list_technicians(
+    _: User = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    statement = (
+        select(User)
+        .where(User.role == "Technician", User.is_active == 1)
+        .order_by(User.display_name)
+    )
+    return list(session.scalars(statement))
+
+
+@router.get(
+    "/api/work-order-notification-recipients",
+    response_model=list[UserRead],
+    tags=["work orders"],
+)
+def list_work_order_notification_recipients(
+    store_number: int = Query(ge=1, le=9999, alias="storeNumber"),
+    _: User = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    statement = (
+        select(User)
+        .where(
+            User.is_active == 1,
+            (User.username == "jc")
+            | ((User.role == "Manager") & (User.store_number == store_number)),
+        )
+        .order_by(User.display_name)
+    )
+    return list(session.scalars(statement))
+
+
 @router.patch("/api/users/{user_id}", response_model=UserRead, tags=["user management"])
 def update_user(
     user_id: UUID,
@@ -190,6 +225,22 @@ def get_work_order(
     _: User = Depends(current_user),
 ):
     return find_order(work_order_id, repo)
+
+
+@router.delete("/api/work-orders/{work_order_id}", status_code=204, tags=["work orders"])
+def delete_work_order(
+    work_order_id: UUID,
+    repo: WorkOrderRepository = Depends(repository),
+    user: User = Depends(current_user),
+):
+    if user.username != "jc":
+        raise HTTPException(status_code=403, detail="Only jc can delete work orders")
+    item = find_order(work_order_id, repo)
+    attachment_paths = [UPLOADS / attachment.stored_name for attachment in item.attachments]
+    repo.session.delete(item)
+    repo.session.commit()
+    for path in attachment_paths:
+        path.unlink(missing_ok=True)
 
 
 @router.post(

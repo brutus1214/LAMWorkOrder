@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const statusRank = {New: 0, Scheduled: 1, InProgress: 2, Blocked: 3, Completed: 4, Cancelled: 5};
+const allMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
 let token = sessionStorage.getItem("lamworkorder.token"); let user = null; let orders = []; let filter = "All";
 const label = (value) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -17,12 +18,15 @@ function showApp() {
   $("store").value = user.storeNumber === 99 ? "1" : String(user.storeNumber); load();
 }
 function signOut(callApi = true) { if (callApi && token) api("/api/auth/logout", {method:"POST"}).catch(()=>{}); token = null; user = null; sessionStorage.removeItem("lamworkorder.token"); $("app-view").hidden = true; $("login-view").hidden = false; }
+function parseCreatedAt(value) { if (!value) return NaN; return Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`); }
+function formatCreatedDate(value) { const created = parseCreatedAt(value); return Number.isNaN(created) ? String(value || "").split("T")[0] : new Intl.DateTimeFormat("en-US", {month:"numeric", day:"numeric", year:"2-digit"}).format(created); }
+function isRecentWorkOrder(order, now = Date.now()) { const created = parseCreatedAt(order.createdAt); return Number.isNaN(created) || created > now - allMaxAgeMs; }
 function visibleOrders() {
   const groups = {New:["New"], Open:["Scheduled","InProgress","Blocked"], Completed:["Completed"], Closed:["Cancelled"]};
-  return orders.filter(x => filter === "All" || groups[filter].includes(x.status)).sort((a,b) => (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9) || b.createdAt.localeCompare(a.createdAt));
+  return orders.filter(x => filter === "All" ? isRecentWorkOrder(x) : groups[filter].includes(x.status)).sort((a,b) => (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9) || b.createdAt.localeCompare(a.createdAt));
 }
 function render() {
-  const visible = visibleOrders(); $("orders").innerHTML = visible.map(o => `<tr><td><strong>${escapeHtml(o.workOrderNumber)}</strong></td><td>${escapeHtml(o.title)}<small>Store ${o.storeNumber} · ${escapeHtml(o.location)}</small></td><td><span class="pill ${o.priority.toLowerCase()}">${label(o.priority)}</span></td><td><span class="pill ${o.status.toLowerCase()}">${label(o.status)}</span></td><td>${escapeHtml(o.assignedTo || "Unassigned")}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">No matching work orders.</td></tr>';
+  const visible = visibleOrders(); $("orders").innerHTML = visible.map(o => `<tr><td><span class="order-number"><strong>${escapeHtml(o.workOrderNumber)}</strong><small class="created-date">${escapeHtml(formatCreatedDate(o.createdAt))}</small></span></td><td>${escapeHtml(o.title)}<small>Store ${o.storeNumber} · ${escapeHtml(o.location)}</small></td><td><span class="pill ${o.priority.toLowerCase()}">${label(o.priority)}</span></td><td><span class="pill ${o.status.toLowerCase()}">${label(o.status)}</span></td><td>${escapeHtml(o.assignedTo || "Unassigned")}</td></tr>`).join("") || '<tr><td colspan="5" class="empty">No matching work orders.</td></tr>';
   $("total").textContent = orders.length; $("urgent").textContent = orders.filter(x => ["High","Emergency"].includes(x.priority)).length; $("progress").textContent = orders.filter(x => x.status === "InProgress").length; $("message").textContent = `${visible.length} work order${visible.length === 1 ? "" : "s"}`;
 }
 async function load() { try { $("message").textContent = "Loading…"; const q = $("search").value.trim(); orders = await api(`/api/work-orders${q ? `?search=${encodeURIComponent(q)}` : ""}`); render(); } catch(e) { $("message").textContent = e.message; } }

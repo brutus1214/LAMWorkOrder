@@ -21,16 +21,19 @@ def client():
     testing_session = sessionmaker(bind=engine, expire_on_commit=False)
     Base.metadata.create_all(engine)
     with testing_session() as session:
-        for username, role in [
-            ("admin", "Admin"),
-            ("technician", "Technician"),
-            ("requester", "Requester"),
+        for username, role, store_number, email in [
+            ("admin", "Admin", 1, None),
+            ("technician", "Technician", 1, "technician@example.com"),
+            ("requester", "Requester", 1, None),
+            ("manager", "Manager", 3, "manager3@example.com"),
         ]:
             session.add(
                 User(
                     username=username,
                     password_hash=hash_password("test-password"),
                     display_name=username.title(),
+                    store_number=store_number,
+                    email=email,
                     role=role,
                 )
             )

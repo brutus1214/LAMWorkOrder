@@ -5,9 +5,12 @@ Interactive OpenAPI is at `/docs`.
 - `GET /health`
 - `GET /api/work-orders?status=&priority=&search=`
 - `GET /api/work-orders/{id}`
+- `GET /api/technicians`
+- `GET /api/work-order-notification-recipients?storeNumber=`
 - `POST /api/work-orders`
 - `PATCH /api/work-orders/{id}/status`
 - `PUT /api/work-orders/{id}` (Admin or Manager; edits every detail)
+- `DELETE /api/work-orders/{id}` (`jc` only)
 - `POST /api/work-orders/{id}/attachments` (Technician, Manager, or Admin; multiple `files` parts)
 - `GET /api/attachments/{id}/content`
 - `DELETE /api/attachments/{id}` (Admin or Manager)

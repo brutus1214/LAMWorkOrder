@@ -26,14 +26,9 @@ from PySide6.QtWidgets import (
 )
 
 from .client import ApiClient
+from .work_order_filters import filter_work_orders, format_created_date
 
 FILTERS = ["All", "New", "Open/In Progress", "Completed", "Closed/Cancelled"]
-GROUPS = {
-    "New": {"New"},
-    "Open/In Progress": {"Scheduled", "InProgress", "Blocked"},
-    "Completed": {"Completed"},
-    "Closed/Cancelled": {"Cancelled"},
-}
 RANK = {"New": 0, "Scheduled": 1, "InProgress": 2, "Blocked": 3, "Completed": 4, "Cancelled": 5}
 
 
@@ -182,13 +177,13 @@ class MainWindow(QMainWindow):
         try:
             orders = self.client.list_work_orders(self.search.text())
             selected = self.status.currentText()
-            orders = [o for o in orders if selected == "All" or o["status"] in GROUPS[selected]]
+            orders = filter_work_orders(orders, selected)
             orders.sort(key=lambda o: (RANK.get(o["status"], 9), o["createdAt"]), reverse=False)
             self.table.setRowCount(len(orders))
             for row, o in enumerate(orders):
                 for col, value in enumerate(
                     [
-                        o["workOrderNumber"],
+                        f"{o['workOrderNumber']}  {format_created_date(o.get('createdAt', ''))}",
                         f"{o['title']}\nStore {o['storeNumber']} · {o['location']}",
                         o["priority"],
                         o["status"].replace("InProgress", "In Progress"),

@@ -1,10 +1,14 @@
 package com.lamworkorder
 
 import android.graphics.BitmapFactory
+import android.content.ClipData
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.util.Base64
 import android.util.Patterns
 import android.os.Bundle
+import android.widget.Toast
 import android.widget.MediaController
 import android.widget.VideoView
 import androidx.core.content.FileProvider
@@ -25,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -54,6 +59,7 @@ import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 
 class MainActivity : ComponentActivity() {
@@ -68,7 +74,7 @@ class MainActivity : ComponentActivity() {
     var manageUsers by remember { mutableStateOf(false) }
     if (profile) { Profile(model, state.user!!, { profile = false }); return }
     if (manageUsers) { ManageUsers(model, state, { manageUsers = false }); return }
-    selected?.let { Detail(model, it, state.user!!, { selected = null }); return }
+    selected?.let { Detail(model, it, state, { selected = null }); return }
     Queue(model, state, { selected = it }, { profile = true }, { manageUsers = true; model.loadUsers() })
 }
 
@@ -91,7 +97,7 @@ class MainActivity : ComponentActivity() {
     val validPassword = password.length >= 8
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+        Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.Center,
     ) {
         BrandLogo(Modifier.fillMaxWidth().height(92.dp))
@@ -308,20 +314,12 @@ private fun formatUsPhone(input: String): String {
     var filter by remember { mutableStateOf("All") }
     var menuOpen by remember { mutableStateOf(false) }
     var intakeOpen by remember { mutableStateOf(false) }
-    if (intakeOpen) { Intake(model, currentUser) { intakeOpen = false }; return }
-    val visibleOrders = remember(state.orders, filter) {
-        state.orders.filter { order -> when (filter) {
-            "New" -> order.status == "New"
-            "Open/In Progress" -> order.status in listOf("Scheduled", "InProgress", "Blocked")
-            "Completed" -> order.status == "Completed"
-            "Closed/Cancelled" -> order.status == "Cancelled"
-            else -> true
-        }}.sortedWith(compareBy<WorkOrder> { when (it.status) {
-            "New" -> 0; "Scheduled" -> 1; "InProgress" -> 2; "Blocked" -> 3
-            "Completed" -> 4; "Cancelled" -> 5; else -> 6
-        }}.thenBy { it.workOrderNumber })
+    LaunchedEffect(currentUser.id) {
+        if (state.technicians.isEmpty()) model.loadTechnicians()
     }
-    Box(Modifier.fillMaxSize().background(Color(0xFFF0F4F7))) {
+    if (intakeOpen) { Intake(model, state) { intakeOpen = false }; return }
+    val visibleOrders = remember(state.orders, filter) { visibleWorkOrders(state.orders, filter) }
+    Box(Modifier.fillMaxSize().background(Color(0xFFF0F4F7)).safeDrawingPadding()) {
       Column(Modifier.fillMaxSize().padding(16.dp).padding(bottom = 58.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
         BrandLogo(Modifier.fillMaxWidth().height(54.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -338,7 +336,8 @@ private fun formatUsPhone(input: String): String {
         /* Previous expanded account actions:
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Column{Text("Work orders",style=MaterialTheme.typography.headlineLarge);Text("${currentUser.displayName} · ${if(currentUser.role=="Admin") "Administrator" else currentUser.role}")};Column{if(currentUser.role in listOf("Admin","Manager")) TextButton(showUsers){Text("Manage Users")};TextButton(showProfile){Text("Profile")};TextButton(model::logout){Text("Logout")}}}
         */
-        Row{OutlinedTextField(search,{search=it},label={Text("Search")},modifier=Modifier.weight(1f));Button({model.refresh(search)}){Text("Go")}}
+        Row{OutlinedTextField(search,{search=it},label={Text("Search")},modifier=Modifier.weight(1f));Button({model.refresh(search);model.loadTechnicians()}){Text("Go")}}
+        OutlinedButton({model.refresh(search);model.loadTechnicians()}, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) { Text("Refresh") }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("All", "New", "Open/In Progress", "Completed", "Closed/Cancelled").forEach { option ->
                 FilterChip(selected = filter == option, onClick = { filter = option }, label = { Text(option) })
@@ -351,7 +350,13 @@ private fun formatUsPhone(input: String): String {
         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             items(visibleOrders,key={it.id}) { order ->
                 Card(Modifier.fillMaxWidth().clickable{select(order)}) { Column(Modifier.padding(14.dp)) {
-                    Text(order.workOrderNumber,fontWeight=FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(order.workOrderNumber,fontWeight=FontWeight.Bold)
+                        Text(formatWorkOrderCreatedDate(order.createdAt), style = MaterialTheme.typography.labelMedium)
+                    }
                     Text(order.title,style=MaterialTheme.typography.titleMedium)
                     Text("Store ${order.storeNumber} - ${order.location} - ${if(order.status=="InProgress") "In Progress" else order.status}")
                 }}
@@ -367,7 +372,7 @@ private fun formatUsPhone(input: String): String {
 @Composable private fun ManageUsers(model: WorkOrderViewModel, state: QueueState, back: () -> Unit) {
     var selected by remember { mutableStateOf<User?>(null) }
     selected?.let { EditUser(model, it, state.user!!, { selected = null }) ; return }
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Manage Users", style = MaterialTheme.typography.headlineLarge)
             TextButton(back) { Text("Back") }
@@ -411,12 +416,29 @@ private fun formatUsPhone(input: String): String {
     }
 }
 
-@Composable private fun Profile(model:WorkOrderViewModel,user:User,back:()->Unit){var name by remember{mutableStateOf(user.displayName)};var email by remember{mutableStateOf(user.email.orEmpty())};Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text("Profile",style=MaterialTheme.typography.headlineLarge);Text("${user.username} · ${user.role}");OutlinedTextField(name,{name=it},label={Text("Display name")});OutlinedTextField(email,{email=it},label={Text("Email")});Button({model.updateProfile(name,email,back)},enabled=name.isNotBlank()){Text("Save")};TextButton(back){Text("Cancel")}}}
+@Composable private fun Profile(model:WorkOrderViewModel,user:User,back:()->Unit){var name by remember{mutableStateOf(user.displayName)};var email by remember{mutableStateOf(user.email.orEmpty())};Column(Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text("Profile",style=MaterialTheme.typography.headlineLarge);Text("${user.username} · ${user.role}");OutlinedTextField(name,{name=it},label={Text("Display name")});OutlinedTextField(email,{email=it},label={Text("Email")});Button({model.updateProfile(name,email,back)},enabled=name.isNotBlank()){Text("Save")};TextButton(back){Text("Cancel")}}}
 
-@Composable private fun Detail(model:WorkOrderViewModel,o:WorkOrder,user:User,back:()->Unit){
+private fun technicianOptions(state: QueueState): List<User> =
+    (state.technicians + state.users.filter { it.role == "Technician" })
+        .distinctBy { it.id }
+        .sortedBy { it.displayName }
+
+@Composable private fun Detail(model:WorkOrderViewModel,o:WorkOrder,state:QueueState,back:()->Unit){
+    val user = state.user ?: return
     val full=user.role in listOf("Admin","Manager"); val statusEdit=full||user.role=="Technician"
     var title by remember{mutableStateOf(o.title)};var description by remember{mutableStateOf(o.description)};var requester by remember{mutableStateOf(o.requestedBy)};var location by remember{mutableStateOf(o.location)};var priority by remember{mutableStateOf(o.priority)};var assigned by remember{mutableStateOf(o.assignedTo.orEmpty())};var status by remember{mutableStateOf(o.status)};var note by remember{mutableStateOf(o.statusNote.orEmpty())}
     val context=LocalContext.current
+    val scope = rememberCoroutineScope()
+    var confirmDelete by remember { mutableStateOf(false) }
+    LaunchedEffect(o.id, user.role) {
+        if (state.technicians.isEmpty()) {
+            model.loadTechnicians()
+        }
+        model.loadNotificationRecipients(o.storeNumber)
+        if (user.role in listOf("Admin", "Manager") && state.users.isEmpty()) {
+            model.loadUsers()
+        }
+    }
     var captureUri by remember { mutableStateOf<Uri?>(null) }
     fun uploadUris(uris: List<Uri>) {
         val parts=uris.mapNotNull{uri->context.contentResolver.openInputStream(uri)?.use{input->
@@ -435,16 +457,53 @@ private fun formatUsPhone(input: String): String {
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()){uris:List<Uri>->uploadUris(uris)}
     val photoCapture=rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()){saved->if(saved)captureUri?.let{uploadUris(listOf(it))}}
     val videoCapture=rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()){saved->if(saved)captureUri?.let{uploadUris(listOf(it))}}
-    LazyColumn(Modifier.fillMaxSize().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){item{Button(back){Text("Back")}};item{Text(o.workOrderNumber,fontWeight=FontWeight.Bold)}
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { if (!state.loading) confirmDelete = false },
+            title = { Text("Delete work order?") },
+            text = { Text("${o.workOrderNumber} will be permanently deleted.") },
+            confirmButton = {
+                Button(
+                    {
+                        model.deleteWorkOrder(o.id) {
+                            confirmDelete = false
+                            back()
+                        }
+                    },
+                    enabled = !state.loading,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton({ confirmDelete = false }, enabled = !state.loading) { Text("Cancel") }
+            },
+        )
+    }
+    LazyColumn(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){item{Button(back){Text("Back")}};item{Text(o.workOrderNumber,fontWeight=FontWeight.Bold)}
+        item{WorkOrderSendActions(model,o,state.users + technicianOptions(state),user,title,description,requester,location,priority,assigned,status,note)}
         item{OutlinedTextField(value="LA Mart ${o.storeNumber}",onValueChange={},readOnly=true,label={Text("Store")},supportingText={Text("Set when work order was created")},modifier=Modifier.fillMaxWidth())};item{Field("Title",title,{title=it},full)};item{Field("Description",description,{description=it},full)}
         if(o.attachments.isNotEmpty())item{AttachmentGallery(model,o.attachments)}
         item{Field("Requested by",requester,{requester=it},full)};item{Field("Location",location,{location=it},full)}
         item{SelectionField("Priority",priority,listOf("Low","Normal","High","Emergency"),{priority=it},full)}
-        item{Field("Assigned to",assigned,{assigned=it},full)}
+        item{AssigneeDropdown(assigned,technicianOptions(state),{assigned=it},full)}
         item{SelectionField("Status",status,listOf("New","Scheduled","InProgress","Blocked","Completed","Cancelled"),{status=it},statusEdit) { if(it=="InProgress") "In Progress" else it }}
         item{Field("Status note",note,{note=it},statusEdit)}
-        if(full)item{Button({model.update(o.id,UpdateWorkOrder(o.storeNumber,title,description,requester,location,priority,assigned.ifBlank{null},o.dueAt,status,note.ifBlank{null}),back)}){Text("Save all details")}}
+        if(full)item{Button({
+            val shouldNotify = assigned.isNotBlank() && assigned != o.assignedTo.orEmpty()
+            model.update(o.id,UpdateWorkOrder(o.storeNumber,title,description,requester,location,priority,assigned.ifBlank{null},o.dueAt,status,note.ifBlank{null}),{
+                if (shouldNotify) scope.launch { notifyAssignment(context,model,state.notificationRecipients,o,title,description,requester,location,priority,assigned,status,note) }
+                back()
+            })
+        }){Text("Save all details")}}
         else if(statusEdit)item{Button({model.updateStatus(o.id,status,note,back)}){Text("Save status")}}
+        if(user.username.equals("jc", ignoreCase = true))item{
+            OutlinedButton(
+                { confirmDelete = true },
+                enabled = !state.loading,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            ) { Text("Delete Work Order") }
+        }
         if(statusEdit)item{
             Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
                 Text("Add photos or videos",style=MaterialTheme.typography.titleMedium)
@@ -453,6 +512,299 @@ private fun formatUsPhone(input: String): String {
                 OutlinedButton({picker.launch(arrayOf("image/*","video/*"))},Modifier.fillMaxWidth()){Text("Choose from device")}
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable private fun AssigneeDropdown(
+    assignedTo: String,
+    technicians: List<User>,
+    onAssigned: (String) -> Unit,
+    enabled: Boolean,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val technicianNames = remember(technicians) {
+        technicians.map { it.displayName }.distinct().sorted()
+    }
+    val options = remember(technicianNames, assignedTo) {
+        listOf("") + technicianNames +
+            if (assignedTo.isNotBlank() && assignedTo !in technicianNames) listOf(assignedTo) else emptyList()
+    }
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { if (enabled) expanded = !expanded },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        OutlinedTextField(
+            value = assignedTo.ifBlank { "Unassigned" },
+            onValueChange = {},
+            readOnly = true,
+            enabled = enabled,
+            label = { Text("Assigned to") },
+            supportingText = {
+                Text(
+                    if (technicianNames.isEmpty()) "No technicians loaded. Tap Refresh after backend restart."
+                    else "Optional technician assignment"
+                )
+            },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier.menuAnchor().fillMaxWidth(),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.ifBlank { "Unassigned" }) },
+                    onClick = {
+                        onAssigned(option)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable private fun WorkOrderSendActions(
+    model: WorkOrderViewModel,
+    order: WorkOrder,
+    users: List<User>,
+    currentUser: User,
+    title: String,
+    description: String,
+    requestedBy: String,
+    location: String,
+    priority: String,
+    assignedTo: String,
+    status: String,
+    statusNote: String?,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var vendorEmail by remember { mutableStateOf("") }
+    var sendMenuOpen by remember { mutableStateOf(false) }
+    var preparingEmail by remember { mutableStateOf(false) }
+    val contacts = remember(users, currentUser) {
+        listOf(currentUser) + users.filter { it.id != currentUser.id }
+    }
+    val requester = remember(contacts, requestedBy) { findWorkOrderContact(contacts, requestedBy) }
+    val technician = remember(contacts, assignedTo) { findWorkOrderContact(contacts, assignedTo) }
+    val subject = remember(order.workOrderNumber) { workOrderShareSubject(order) }
+    val message = workOrderShareText(
+        order = order,
+        title = title,
+        description = description,
+        requestedBy = requestedBy,
+        location = location,
+        priority = priority,
+        assignedTo = assignedTo.ifBlank { null },
+        status = status,
+        statusNote = statusNote?.takeIf(String::isNotBlank),
+    )
+    val validVendorEmail = vendorEmail.isBlank() ||
+        Patterns.EMAIL_ADDRESS.matcher(vendorEmail.trim()).matches()
+
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Send work order", style = MaterialTheme.typography.titleMedium)
+        Box(Modifier.fillMaxWidth()) {
+            Button(
+                { sendMenuOpen = true },
+                enabled = !preparingEmail,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (preparingEmail) "Preparing email..." else "Send...") }
+            DropdownMenu(sendMenuOpen, { sendMenuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Share work order") },
+                    onClick = {
+                        sendMenuOpen = false
+                        shareWorkOrder(context, subject, message)
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Text requester") },
+                    enabled = textNumber(requester) != null,
+                    onClick = {
+                        sendMenuOpen = false
+                        textWorkOrder(context, textNumber(requester), message)
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Email requester") },
+                    enabled = emailAddress(requester) != null && !preparingEmail,
+                    onClick = {
+                        sendMenuOpen = false
+                        scope.launch {
+                            preparingEmail = true
+                            emailWorkOrder(context, model, order.attachments, emailAddress(requester), subject, message)
+                            preparingEmail = false
+                        }
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Text technician") },
+                    enabled = textNumber(technician) != null,
+                    onClick = {
+                        sendMenuOpen = false
+                        textWorkOrder(context, textNumber(technician), message)
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Email technician") },
+                    enabled = emailAddress(technician) != null && !preparingEmail,
+                    onClick = {
+                        sendMenuOpen = false
+                        scope.launch {
+                            preparingEmail = true
+                            emailWorkOrder(context, model, order.attachments, emailAddress(technician), subject, message)
+                            preparingEmail = false
+                        }
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Email vendor") },
+                    enabled = vendorEmail.isNotBlank() && validVendorEmail && !preparingEmail,
+                    onClick = {
+                        sendMenuOpen = false
+                        scope.launch {
+                            preparingEmail = true
+                            emailWorkOrder(context, model, order.attachments, vendorEmail.trim(), subject, message)
+                            preparingEmail = false
+                        }
+                    },
+                )
+            }
+        }
+        OutlinedTextField(
+            value = vendorEmail,
+            onValueChange = { vendorEmail = it.trim() },
+            label = { Text("Vendor email") },
+            isError = !validVendorEmail,
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+private fun shareWorkOrder(context: Context, subject: String, message: String) {
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, subject)
+        putExtra(Intent.EXTRA_TEXT, message)
+    }
+    launchChooser(context, intent, "Share work order")
+}
+
+private fun textWorkOrder(context: Context, phoneNumber: String?, message: String) {
+    if (phoneNumber.isNullOrBlank()) return
+    val intent = Intent(Intent.ACTION_SENDTO).apply {
+        data = Uri.parse("smsto:${Uri.encode(phoneNumber)}")
+        putExtra("sms_body", message)
+    }
+    launchChooser(context, intent, "Text work order")
+}
+
+private suspend fun emailWorkOrder(
+    context: Context,
+    model: WorkOrderViewModel,
+    attachments: List<Attachment>,
+    email: String?,
+    subject: String,
+    message: String,
+) {
+    emailWorkOrder(context, model, attachments, listOfNotNull(email?.takeIf(String::isNotBlank)), subject, message)
+}
+
+private suspend fun emailWorkOrder(
+    context: Context,
+    model: WorkOrderViewModel,
+    attachments: List<Attachment>,
+    emails: List<String>,
+    subject: String,
+    message: String,
+) {
+    if (emails.isEmpty()) return
+    val attachmentUris = prepareEmailAttachmentUris(context, model, attachments)
+    val intent = if (attachmentUris.isEmpty()) {
+        Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("mailto:")
+            putExtra(Intent.EXTRA_EMAIL, emails.toTypedArray())
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, message)
+        }
+    } else {
+        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = "*/*"
+            putExtra(Intent.EXTRA_EMAIL, emails.toTypedArray())
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, message)
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(attachmentUris))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            clipData = ClipData.newUri(context.contentResolver, "work order attachment", attachmentUris.first()).also { clip ->
+                attachmentUris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+            }
+        }
+    }
+    launchChooser(context, intent, "Email work order")
+}
+
+private suspend fun prepareEmailAttachmentUris(
+    context: Context,
+    model: WorkOrderViewModel,
+    attachments: List<Attachment>,
+): List<Uri> {
+    if (attachments.isEmpty()) return emptyList()
+    val directory = File(context.cacheDir, "shared_attachments").apply { mkdirs() }
+    directory.listFiles()?.forEach { it.delete() }
+    return attachments.mapNotNull { attachment ->
+        runCatching {
+            val file = File(directory, "${attachment.id}_${safeAttachmentName(attachment.originalName)}")
+            file.writeBytes(model.attachmentBytes(attachment.id))
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        }.getOrNull()
+    }
+}
+
+private fun safeAttachmentName(name: String): String =
+    name.ifBlank { "attachment" }.replace(Regex("[^A-Za-z0-9._-]"), "_")
+
+private suspend fun notifyAssignment(
+    context: Context,
+    model: WorkOrderViewModel,
+    recipients: List<User>,
+    order: WorkOrder,
+    title: String,
+    description: String,
+    requestedBy: String,
+    location: String,
+    priority: String,
+    assignedTo: String,
+    status: String,
+    statusNote: String?,
+) {
+    val emails = recipients.mapNotNull(::emailAddress).distinct()
+    if (emails.isEmpty()) {
+        Toast.makeText(context, "No JC or store manager email found.", Toast.LENGTH_LONG).show()
+        return
+    }
+    val message = "Technician assigned: $assignedTo\n\n" + workOrderShareText(
+        order = order,
+        title = title,
+        description = description,
+        requestedBy = requestedBy,
+        location = location,
+        priority = priority,
+        assignedTo = assignedTo,
+        status = status,
+        statusNote = statusNote?.takeIf(String::isNotBlank),
+    )
+    emailWorkOrder(context, model, order.attachments, emails, "Assigned: ${order.workOrderNumber}", message)
+}
+
+private fun launchChooser(context: Context, intent: Intent, title: String) {
+    runCatching {
+        context.startActivity(Intent.createChooser(intent, title))
+    }.onFailure {
+        Toast.makeText(context, "No matching app found.", Toast.LENGTH_LONG).show()
     }
 }
 
@@ -695,15 +1047,26 @@ private fun formatUsPhone(input: String): String {
     }
 }
 
-@Composable private fun Intake(model: WorkOrderViewModel, user: User, close: () -> Unit) {
+@Composable private fun Intake(model: WorkOrderViewModel, state: QueueState, close: () -> Unit) {
+    val user = state.user ?: return
     var store by remember(user.id) { mutableIntStateOf(user.storeNumber) }
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var location by remember { mutableStateOf("") }
     var priority by remember { mutableStateOf("Normal") }
+    var assigned by remember { mutableStateOf("") }
     var attachments by remember { mutableStateOf<List<MultipartBody.Part>>(emptyList()) }
     var captureUri by remember { mutableStateOf<Uri?>(null) }
+    var submitting by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        if (state.technicians.isEmpty()) model.loadTechnicians()
+        if (user.role in listOf("Admin", "Manager") && state.users.isEmpty()) model.loadUsers()
+    }
+    LaunchedEffect(store) {
+        model.loadNotificationRecipients(store)
+    }
     fun uriToPart(uri: Uri): MultipartBody.Part? = context.contentResolver.openInputStream(uri)?.use { input ->
         val bytes = input.readBytes()
         val type = context.contentResolver.getType(uri) ?: "application/octet-stream"
@@ -730,14 +1093,28 @@ private fun formatUsPhone(input: String): String {
     }
 
     Scaffold(
+        modifier = Modifier.safeDrawingPadding(),
         topBar = { Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("New Work Order", style = MaterialTheme.typography.headlineMedium)
             TextButton(close) { Text("Cancel") }
         }},
         bottomBar = { Surface(shadowElevation = 8.dp) { Button({
-            model.create(CreateWorkOrder(store, title, description, user.displayName, location, priority), attachments, close)
-        }, enabled = title.isNotBlank() && description.isNotBlank() && location.isNotBlank(), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            Text("Create Work Order")
+            if (submitting) return@Button
+            submitting = true
+            val selectedAssignee = assigned
+            model.create(
+                CreateWorkOrder(store, title, description, user.displayName, location, priority, selectedAssignee.ifBlank { null }),
+                attachments,
+                done = { created ->
+                    close()
+                    if (selectedAssignee.isNotBlank()) {
+                        scope.launch { notifyAssignment(context,model,state.notificationRecipients,created,title,description,user.displayName,location,priority,selectedAssignee,created.status,created.statusNote) }
+                    }
+                },
+                failed = { submitting = false },
+            )
+        }, enabled = !submitting && !state.loading && title.isNotBlank() && description.isNotBlank() && location.isNotBlank(), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(if (submitting) "Creating..." else "Create Work Order")
         }}},
     ) { contentPadding ->
       Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(contentPadding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -754,6 +1131,7 @@ private fun formatUsPhone(input: String): String {
         )
         Field("Location", location, { location = it }, true)
         SelectionField("Priority", priority, listOf("Low", "Normal", "High", "Emergency"), { priority = it }, true)
+        AssigneeDropdown(assigned, technicianOptions(state), { assigned = it }, true)
         Text(
             if (attachments.isEmpty()) "Add photos or videos" else "${attachments.size} attachment(s) selected",
             style = MaterialTheme.typography.titleMedium,

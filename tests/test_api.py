@@ -133,6 +133,69 @@ def test_create_list_filter_and_update(client):
     assert updated.json()["statusNote"] == "Technician dispatched"
 
 
+def test_assignment_support_lists_technicians_and_notification_recipients(client):
+    technicians = client.get("/api/technicians")
+    assert technicians.status_code == 200
+    assert [user["username"] for user in technicians.json()] == ["technician"]
+
+    client.post(
+        "/api/auth/register",
+        json={
+            "username": "jc",
+            "password": "secure-password",
+            "displayName": "James Chang",
+            "storeNumber": 1,
+            "email": "jc@example.com",
+            "phoneNumber": "202-555-0100",
+        },
+    )
+    recipients = client.get(
+        "/api/work-order-notification-recipients",
+        params={"storeNumber": 3},
+    )
+    assert recipients.status_code == 200
+    assert {user["email"] for user in recipients.json()} == {
+        "jc@example.com",
+        "manager3@example.com",
+    }
+
+
+def test_only_jc_can_delete_work_order(client, tmp_path, monkeypatch):
+    import lamworkorder.api as api
+
+    monkeypatch.setattr(api, "UPLOADS", tmp_path)
+    created = client.post("/api/work-orders", json=PAYLOAD).json()
+    uploaded = client.post(
+        f"/api/work-orders/{created['id']}/attachments",
+        files=[("files", ("proof.jpg", b"jpeg", "image/jpeg"))],
+    )
+    assert uploaded.status_code == 201
+    assert any(tmp_path.iterdir())
+
+    denied = client.delete(f"/api/work-orders/{created['id']}")
+    assert denied.status_code == 403
+    assert client.get(f"/api/work-orders/{created['id']}").status_code == 200
+
+    jc = client.post(
+        "/api/auth/register",
+        json={
+            "username": "jc",
+            "password": "secure-password",
+            "displayName": "James Chang",
+            "storeNumber": 1,
+            "email": "jc@example.com",
+            "phoneNumber": "202-555-0100",
+        },
+    ).json()
+    deleted = client.delete(
+        f"/api/work-orders/{created['id']}",
+        headers={"Authorization": f"Bearer {jc['token']}"},
+    )
+    assert deleted.status_code == 204
+    assert client.get(f"/api/work-orders/{created['id']}").status_code == 404
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_validation_and_missing(client):
     invalid = client.post("/api/work-orders", json={**PAYLOAD, "title": ""})
     assert invalid.status_code == 422
