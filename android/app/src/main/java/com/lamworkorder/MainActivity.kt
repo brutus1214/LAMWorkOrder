@@ -13,6 +13,7 @@ import android.widget.MediaController
 import android.widget.VideoView
 import androidx.core.content.FileProvider
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -79,6 +80,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable private fun Login(model: WorkOrderViewModel, state: QueueState) {
     var createMode by remember { mutableStateOf(false) }
+    BackHandler(enabled = createMode) { createMode = false }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var name by remember { mutableStateOf("") }
@@ -316,7 +318,11 @@ private fun formatUsPhone(input: String): String {
     LaunchedEffect(currentUser.id) {
         if (state.technicians.isEmpty()) model.loadTechnicians()
     }
-    if (intakeOpen) { Intake(model, state) { intakeOpen = false }; return }
+    if (intakeOpen) {
+        BackHandler { intakeOpen = false }
+        Intake(model, state) { intakeOpen = false }
+        return
+    }
     val visibleOrders = remember(state.orders, filter) { visibleWorkOrders(state.orders, filter) }
     Box(Modifier.fillMaxSize().background(Color(0xFFF0F4F7)).safeDrawingPadding()) {
       Column(Modifier.fillMaxSize().padding(16.dp).padding(bottom = 58.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -370,6 +376,7 @@ private fun formatUsPhone(input: String): String {
 
 @Composable private fun ManageUsers(model: WorkOrderViewModel, state: QueueState, back: () -> Unit) {
     var selected by remember { mutableStateOf<User?>(null) }
+    BackHandler { if (selected == null) back() else selected = null }
     selected?.let { EditUser(model, it, state.user!!, { selected = null }) ; return }
     Column(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -415,7 +422,7 @@ private fun formatUsPhone(input: String): String {
     }
 }
 
-@Composable private fun Profile(model:WorkOrderViewModel,user:User,back:()->Unit){var name by remember{mutableStateOf(user.displayName)};var email by remember{mutableStateOf(user.email.orEmpty())};Column(Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text("Profile",style=MaterialTheme.typography.headlineLarge);Text("${user.username} · ${user.role}");OutlinedTextField(name,{name=it},label={Text("Display name")});OutlinedTextField(email,{email=it},label={Text("Email")});Button({model.updateProfile(name,email,back)},enabled=name.isNotBlank()){Text("Save")};TextButton(back){Text("Cancel")}}}
+@Composable private fun Profile(model:WorkOrderViewModel,user:User,back:()->Unit){BackHandler{back()};var name by remember{mutableStateOf(user.displayName)};var email by remember{mutableStateOf(user.email.orEmpty())};Column(Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text("Profile",style=MaterialTheme.typography.headlineLarge);Text("${user.username} · ${user.role}");OutlinedTextField(name,{name=it},label={Text("Display name")});OutlinedTextField(email,{email=it},label={Text("Email")});Button({model.updateProfile(name,email,back)},enabled=name.isNotBlank()){Text("Save")};TextButton(back){Text("Cancel")}}}
 
 private fun technicianOptions(state: QueueState): List<User> =
     (state.technicians + state.users.filter { it.role == "Technician" })
@@ -429,6 +436,7 @@ private fun technicianOptions(state: QueueState): List<User> =
     val context=LocalContext.current
     val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
+    BackHandler { if (confirmDelete) confirmDelete = false else back() }
     LaunchedEffect(o.id, user.role) {
         if (state.technicians.isEmpty()) {
             model.loadTechnicians()
