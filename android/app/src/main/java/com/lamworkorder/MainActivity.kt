@@ -77,6 +77,18 @@ private fun userStoreLabel(user: User): String =
 private fun assigneeLabel(user: User): String =
     "${user.displayName} - ${userStoreLabel(user)}"
 
+private data class AssignmentSendRequest(
+    val order: WorkOrder,
+    val title: String,
+    val description: String,
+    val requestedBy: String,
+    val location: String,
+    val priority: String,
+    val assignedTo: String,
+    val status: String,
+    val statusNote: String?,
+)
+
 @Composable fun WorkOrderApp(model: WorkOrderViewModel = viewModel()) {
     val state by model.state.collectAsState()
     if (state.user == null) { Login(model, state); return }
@@ -450,14 +462,16 @@ private fun assigneeOptions(state: QueueState): List<User> =
     val full=user.role in listOf("Admin","Manager"); val statusEdit=full||user.role=="Technician"
     var title by remember{mutableStateOf(o.title)};var description by remember{mutableStateOf(o.description)};var requester by remember{mutableStateOf(o.requestedBy)};var location by remember{mutableStateOf(o.location)};var priority by remember{mutableStateOf(o.priority)};var assigned by remember{mutableStateOf(o.assignedTo.orEmpty())};var status by remember{mutableStateOf(o.status)};var note by remember{mutableStateOf(o.statusNote.orEmpty())}
     val context=LocalContext.current
-    val scope = rememberCoroutineScope()
     var confirmDelete by remember { mutableStateOf(false) }
+    var assignmentSendRequest by remember { mutableStateOf<AssignmentSendRequest?>(null) }
+    val assignmentContacts = remember(user, state.users, state.assignees) {
+        (listOf(user) + state.users + assigneeOptions(state)).distinctBy { it.id }
+    }
     BackHandler { if (confirmDelete) confirmDelete = false else back() }
     LaunchedEffect(o.id, user.role) {
         if (state.assignees.isEmpty()) {
             model.loadAssignees()
         }
-        model.loadNotificationRecipients(o.storeNumber)
         if (user.role in listOf("Admin", "Manager") && state.users.isEmpty()) {
             model.loadUsers()
         }
@@ -502,6 +516,17 @@ private fun assigneeOptions(state: QueueState): List<User> =
             },
         )
     }
+    assignmentSendRequest?.let { request ->
+        AssignmentSendDialog(
+            model = model,
+            request = request,
+            contacts = assignmentContacts,
+            onDone = {
+                assignmentSendRequest = null
+                back()
+            },
+        )
+    }
     LazyColumn(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){item{Button(back){Text("Back")}};item{Text(o.workOrderNumber,fontWeight=FontWeight.Bold)}
         item{WorkOrderSendActions(model,o,state.users + assigneeOptions(state),user,title,description,requester,location,priority,assigned,status,note)}
         item{OutlinedTextField(value="LA Mart ${o.storeNumber}",onValueChange={},readOnly=true,label={Text("Store")},supportingText={Text("Set when work order was created")},modifier=Modifier.fillMaxWidth())};item{Field("Title",title,{title=it},full)};item{Field("Description",description,{description=it},full)}
@@ -513,9 +538,22 @@ private fun assigneeOptions(state: QueueState): List<User> =
         item{Field("Status note",note,{note=it},statusEdit)}
         if(full)item{Button({
             val shouldNotify = assigned.isNotBlank() && assigned != o.assignedTo.orEmpty()
-            model.update(o.id,UpdateWorkOrder(o.storeNumber,title,description,requester,location,priority,assigned.ifBlank{null},o.dueAt,status,note.ifBlank{null}),{
-                if (shouldNotify) scope.launch { notifyAssignment(context,model,state.notificationRecipients,o,title,description,requester,location,priority,assigned,status,note) }
-                back()
+            model.update(o.id,UpdateWorkOrder(o.storeNumber,title,description,requester,location,priority,assigned.ifBlank{null},o.dueAt,status,note.ifBlank{null}),{ updated ->
+                if (shouldNotify) {
+                    assignmentSendRequest = AssignmentSendRequest(
+                        order = updated,
+                        title = title,
+                        description = description,
+                        requestedBy = requester,
+                        location = location,
+                        priority = priority,
+                        assignedTo = assigned,
+                        status = status,
+                        statusNote = note.ifBlank { null },
+                    )
+                } else {
+                    back()
+                }
             })
         }){Text("Save all details")}}
         else if(statusEdit)item{Button({model.updateStatus(o.id,status,note,back)}){Text("Save status")}}
@@ -764,6 +802,84 @@ private fun assigneeOptions(state: QueueState): List<User> =
     }
 }
 
+@Composable private fun AssignmentSendDialog(
+    model: WorkOrderViewModel,
+    request: AssignmentSendRequest,
+    contacts: List<User>,
+    onDone: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var preparingEmail by remember { mutableStateOf(false) }
+    val assignee = remember(contacts, request.assignedTo) {
+        findWorkOrderContact(contacts, request.assignedTo)
+    }
+    val email = emailAddress(assignee)
+    val phone = textNumber(assignee)
+    val message = "Assigned to: ${request.assignedTo}\n\n" + workOrderShareText(
+        order = request.order,
+        title = request.title,
+        description = request.description,
+        requestedBy = request.requestedBy,
+        location = request.location,
+        priority = request.priority,
+        assignedTo = request.assignedTo,
+        status = request.status,
+        statusNote = request.statusNote?.takeIf(String::isNotBlank),
+    )
+    val attachmentText = when (request.order.attachments.size) {
+        0 -> "No pictures or videos are attached."
+        1 -> "Email will include 1 attachment."
+        else -> "Email will include ${request.order.attachments.size} attachments."
+    }
+
+    AlertDialog(
+        onDismissRequest = onDone,
+        title = { Text("Send work order?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Work order saved. Send the details to ${request.assignedTo}?")
+                Text(attachmentText)
+                if (email == null && phone == null) {
+                    Text("No email or phone number is saved for this assignee.")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onDone) { Text("Skip") }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = {
+                        textWorkOrder(context, phone, message)
+                        onDone()
+                    },
+                    enabled = phone != null,
+                ) { Text("Text") }
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            preparingEmail = true
+                            emailWorkOrder(
+                                context,
+                                model,
+                                request.order.attachments,
+                                email,
+                                "Assigned: ${request.order.workOrderNumber}",
+                                message,
+                            )
+                            preparingEmail = false
+                            onDone()
+                        }
+                    },
+                    enabled = email != null && !preparingEmail,
+                ) { Text(if (preparingEmail) "Preparing..." else "Email") }
+            }
+        },
+    )
+}
+
 private fun shareWorkOrder(context: Context, subject: String, message: String) {
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "text/plain"
@@ -803,6 +919,13 @@ private suspend fun emailWorkOrder(
 ) {
     if (emails.isEmpty()) return
     val attachmentUris = prepareEmailAttachmentUris(context, model, attachments)
+    if (attachments.isNotEmpty() && attachmentUris.isEmpty()) {
+        Toast.makeText(context, "Unable to attach pictures or videos.", Toast.LENGTH_LONG).show()
+        return
+    }
+    if (attachmentUris.size < attachments.size) {
+        Toast.makeText(context, "Some attachments could not be added.", Toast.LENGTH_LONG).show()
+    }
     val intent = if (attachmentUris.isEmpty()) {
         Intent(Intent.ACTION_SENDTO).apply {
             data = Uri.parse("mailto:")
@@ -810,20 +933,60 @@ private suspend fun emailWorkOrder(
             putExtra(Intent.EXTRA_SUBJECT, subject)
             putExtra(Intent.EXTRA_TEXT, message)
         }
+    } else if (attachmentUris.size == 1) {
+        Intent(Intent.ACTION_SEND).apply {
+            type = emailAttachmentType(attachments)
+            putExtra(Intent.EXTRA_EMAIL, emails.toTypedArray())
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, message)
+            putExtra(Intent.EXTRA_STREAM, attachmentUris.first())
+            putExtra(Intent.EXTRA_MIME_TYPES, attachments.map { it.contentType }.distinct().toTypedArray())
+            addAttachmentClipData(context, attachmentUris)
+        }
     } else {
         Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-            type = "*/*"
+            type = emailAttachmentType(attachments)
             putExtra(Intent.EXTRA_EMAIL, emails.toTypedArray())
             putExtra(Intent.EXTRA_SUBJECT, subject)
             putExtra(Intent.EXTRA_TEXT, message)
             putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(attachmentUris))
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            clipData = ClipData.newUri(context.contentResolver, "work order attachment", attachmentUris.first()).also { clip ->
-                attachmentUris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
-            }
+            putExtra(Intent.EXTRA_MIME_TYPES, attachments.map { it.contentType }.distinct().toTypedArray())
+            addAttachmentClipData(context, attachmentUris)
         }
     }
+    grantAttachmentPermissions(context, intent, attachmentUris)
     launchChooser(context, intent, "Email work order")
+}
+
+private fun emailAttachmentType(attachments: List<Attachment>): String {
+    val contentTypes = attachments.map { it.contentType }
+    return when {
+        contentTypes.isEmpty() -> "message/rfc822"
+        contentTypes.all { it.startsWith("image/") } -> "image/*"
+        contentTypes.all { it.startsWith("video/") } -> "video/*"
+        else -> "*/*"
+    }
+}
+
+private fun Intent.addAttachmentClipData(context: Context, uris: List<Uri>) {
+    if (uris.isEmpty()) return
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    clipData = ClipData.newUri(context.contentResolver, "work order attachment", uris.first()).also { clip ->
+        uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+    }
+}
+
+private fun grantAttachmentPermissions(context: Context, intent: Intent, uris: List<Uri>) {
+    if (uris.isEmpty()) return
+    context.packageManager.queryIntentActivities(intent, 0).forEach { resolveInfo ->
+        uris.forEach { uri ->
+            context.grantUriPermission(
+                resolveInfo.activityInfo.packageName,
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+    }
 }
 
 private suspend fun prepareEmailAttachmentUris(
@@ -845,39 +1008,6 @@ private suspend fun prepareEmailAttachmentUris(
 
 private fun safeAttachmentName(name: String): String =
     name.ifBlank { "attachment" }.replace(Regex("[^A-Za-z0-9._-]"), "_")
-
-private suspend fun notifyAssignment(
-    context: Context,
-    model: WorkOrderViewModel,
-    recipients: List<User>,
-    order: WorkOrder,
-    title: String,
-    description: String,
-    requestedBy: String,
-    location: String,
-    priority: String,
-    assignedTo: String,
-    status: String,
-    statusNote: String?,
-) {
-    val emails = recipients.mapNotNull(::emailAddress).distinct()
-    if (emails.isEmpty()) {
-        Toast.makeText(context, "No JC or store manager email found.", Toast.LENGTH_LONG).show()
-        return
-    }
-    val message = "Assigned to: $assignedTo\n\n" + workOrderShareText(
-        order = order,
-        title = title,
-        description = description,
-        requestedBy = requestedBy,
-        location = location,
-        priority = priority,
-        assignedTo = assignedTo,
-        status = status,
-        statusNote = statusNote?.takeIf(String::isNotBlank),
-    )
-    emailWorkOrder(context, model, order.attachments, emails, "Assigned: ${order.workOrderNumber}", message)
-}
 
 private fun launchChooser(context: Context, intent: Intent, title: String) {
     runCatching {
@@ -1154,13 +1284,13 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
     var captureUri by remember { mutableStateOf<Uri?>(null) }
     var submitting by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    var assignmentSendRequest by remember { mutableStateOf<AssignmentSendRequest?>(null) }
+    val assignmentContacts = remember(user, state.users, state.assignees) {
+        (listOf(user) + state.users + assigneeOptions(state)).distinctBy { it.id }
+    }
     LaunchedEffect(Unit) {
         if (state.assignees.isEmpty()) model.loadAssignees()
         if (user.role in listOf("Admin", "Manager") && state.users.isEmpty()) model.loadUsers()
-    }
-    LaunchedEffect(store) {
-        model.loadNotificationRecipients(store)
     }
     fun uriToPart(uri: Uri): MultipartBody.Part? = context.contentResolver.openInputStream(uri)?.use { input ->
         val bytes = input.readBytes()
@@ -1186,6 +1316,17 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
     val videoCapture = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { saved ->
         if (saved) captureUri?.let(::uriToPart)?.let { attachments = attachments + it }
     }
+    assignmentSendRequest?.let { request ->
+        AssignmentSendDialog(
+            model = model,
+            request = request,
+            contacts = assignmentContacts,
+            onDone = {
+                assignmentSendRequest = null
+                close()
+            },
+        )
+    }
 
     Scaffold(
         modifier = Modifier.safeDrawingPadding(),
@@ -1201,9 +1342,21 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
                 CreateWorkOrder(store, title, description, user.displayName, location, priority, selectedAssignee.ifBlank { null }),
                 attachments,
                 done = { created ->
-                    close()
+                    submitting = false
                     if (selectedAssignee.isNotBlank()) {
-                        scope.launch { notifyAssignment(context,model,state.notificationRecipients,created,title,description,user.displayName,location,priority,selectedAssignee,created.status,created.statusNote) }
+                        assignmentSendRequest = AssignmentSendRequest(
+                            order = created,
+                            title = title,
+                            description = description,
+                            requestedBy = user.displayName,
+                            location = location,
+                            priority = priority,
+                            assignedTo = selectedAssignee,
+                            status = created.status,
+                            statusNote = created.statusNote,
+                        )
+                    } else {
+                        close()
                     }
                 },
                 failed = { submitting = false },

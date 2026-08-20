@@ -75,7 +75,9 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
                 failed()
             }
     }
-    fun update(id: String, request: UpdateWorkOrder, done: () -> Unit) = perform({ api.update(auth(), id, request) }, done)
+    fun update(id: String, request: UpdateWorkOrder, done: (WorkOrder) -> Unit) =
+        performWithResult({ api.update(auth(), id, request) }, done)
+
     fun updateStatus(id: String, status: String, note: String?, done: () -> Unit) = perform({ api.updateStatus(auth(), id, StatusUpdate(status, note)) }, done)
 
     fun deleteWorkOrder(id: String, done: () -> Unit) = viewModelScope.launch {
@@ -149,6 +151,13 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching { block() }
             .onSuccess { refresh(); done() }
+            .onFailure { _state.value = _state.value.copy(loading = false, error = it.message) }
+    }
+
+    private fun performWithResult(block: suspend () -> WorkOrder, done: (WorkOrder) -> Unit) = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching { block() }
+            .onSuccess { updated -> refresh(); done(updated) }
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.message) }
     }
 }
