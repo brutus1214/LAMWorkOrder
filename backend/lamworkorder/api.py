@@ -40,6 +40,7 @@ ALLOWED_TYPES = {
     "video/quicktime",
     "video/webm",
 }
+ASSIGNABLE_ROLES = ("Employee", "Manager", "Technician")
 
 
 def repository(session: Session = Depends(get_session)) -> WorkOrderRepository:
@@ -145,6 +146,19 @@ def list_technicians(
         select(User)
         .where(User.role == "Technician", User.is_active == 1)
         .order_by(User.display_name)
+    )
+    return list(session.scalars(statement))
+
+
+@router.get("/api/assignees", response_model=list[UserRead], tags=["work orders"])
+def list_assignees(
+    _: User = Depends(current_user),
+    session: Session = Depends(get_session),
+):
+    statement = (
+        select(User)
+        .where(User.role.in_(ASSIGNABLE_ROLES), User.is_active == 1)
+        .order_by(User.role, User.display_name)
     )
     return list(session.scalars(statement))
 

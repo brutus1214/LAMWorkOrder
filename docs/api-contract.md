@@ -6,6 +6,7 @@ Interactive OpenAPI is at `/docs`.
 - `GET /api/work-orders?status=&priority=&search=`
 - `GET /api/work-orders/{id}`
 - `GET /api/technicians`
+- `GET /api/assignees` (active Employees, Managers, and Technicians)
 - `GET /api/work-order-notification-recipients?storeNumber=`
 - `POST /api/work-orders`
 - `PATCH /api/work-orders/{id}/status`
@@ -22,7 +23,7 @@ Authentication uses `Authorization: Bearer <token>` for all `/api` resources exc
 - `GET /api/profile`
 - `PATCH /api/profile`
 
-Roles are `Requester`, `Technician`, `Manager`, and `Admin`. Fresh installations seed one account per role with the temporary password `ChangeMe123!`; deployments should change these credentials before use. Existing SQLite work-order records are retained by additive startup migrations.
+Roles are `Requester`, `Employee`, `Technician`, `Manager`, and `Admin`. Fresh installations seed one account per role with the temporary password `ChangeMe123!`; deployments should change these credentials before use. Existing SQLite work-order records are retained by additive startup migrations.
 
 Statuses: `New`, `Scheduled`, `InProgress`, `Blocked`, `Completed`, `Cancelled`.
 Priorities: `Low`, `Normal`, `High`, `Emergency`. JSON uses camelCase.

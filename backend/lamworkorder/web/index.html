@@ -32,7 +32,7 @@
       <form id="create-form" class="card intake"><div><span class="eyebrow">INTAKE</span><h2>New work order</h2></div>
         <label>Store<select name="storeNumber" id="store"></select></label><label>Title<input name="title" required maxlength="120"></label><label>Description<textarea name="description" required maxlength="2000"></textarea></label>
         <label>Requested by<input id="requested-by" readonly></label><label>Location<input name="location" required maxlength="160"></label>
-        <label>Priority<select name="priority"><option>Normal</option><option>Low</option><option>High</option><option>Emergency</option></select></label><label>Assigned to<input name="assignedTo" maxlength="120"></label>
+        <label>Priority<select name="priority"><option>Normal</option><option>Low</option><option>High</option><option>Emergency</option></select></label><label>Assigned to<select name="assignedTo" id="assigned-to"><option value="">Unassigned</option></select></label>
         <label>Pictures or videos<input name="attachments" type="file" accept="image/*,video/*" multiple></label><button type="submit">Create work order</button>
       </form>
     </section>

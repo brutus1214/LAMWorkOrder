@@ -1,7 +1,8 @@
 const $ = (id) => document.getElementById(id);
 const statusRank = {New: 0, Scheduled: 1, InProgress: 2, Blocked: 3, Completed: 4, Cancelled: 5};
+const assignableRoleOrder = ["Employee", "Manager", "Technician"];
 const allMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
-let token = sessionStorage.getItem("lamworkorder.token"); let user = null; let orders = []; let filter = "New";
+let token = sessionStorage.getItem("lamworkorder.token"); let user = null; let orders = []; let assignees = []; let filter = "New";
 const label = (value) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
 const escapeHtml = (value = "") => String(value).replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
 async function api(path, options = {}) {
@@ -15,7 +16,7 @@ function showApp() {
   $("login-view").hidden = true; $("app-view").hidden = false; $("account-name").textContent = `${user.displayName} · ${user.role}`;
   $("requested-by").value = user.displayName; $("manage-users").hidden = !["Admin", "Manager"].includes(user.role);
   $("store").innerHTML = Array.from({length: 50}, (_, i) => `<option value="${i + 1}">LA Mart ${i + 1}</option>`).join("");
-  $("store").value = user.storeNumber === 99 ? "1" : String(user.storeNumber); load();
+  $("store").value = user.storeNumber === 99 ? "1" : String(user.storeNumber); load(); loadAssignees();
 }
 function signOut(callApi = true) { if (callApi && token) api("/api/auth/logout", {method:"POST"}).catch(()=>{}); token = null; user = null; sessionStorage.removeItem("lamworkorder.token"); $("app-view").hidden = true; $("login-view").hidden = false; }
 function parseCreatedAt(value) { if (!value) return NaN; return Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`); }
@@ -30,6 +31,8 @@ function render() {
   $("total").textContent = orders.length; $("urgent").textContent = orders.filter(x => ["High","Emergency"].includes(x.priority)).length; $("progress").textContent = orders.filter(x => x.status === "InProgress").length; $("message").textContent = `${visible.length} work order${visible.length === 1 ? "" : "s"}`;
 }
 async function load() { try { $("message").textContent = "Loading…"; const q = $("search").value.trim(); orders = await api(`/api/work-orders${q ? `?search=${encodeURIComponent(q)}` : ""}`); render(); } catch(e) { $("message").textContent = e.message; } }
+function renderAssignees(){ const select=$("assigned-to"); if(!select)return; select.innerHTML='<option value="">Unassigned</option>'+assignableRoleOrder.map(role=>{const members=assignees.filter(u=>u.role===role);return members.length?`<optgroup label="${role}">${members.map(u=>`<option value="${escapeHtml(u.displayName)}">${escapeHtml(u.displayName)}</option>`).join("")}</optgroup>`:"";}).join(""); }
+async function loadAssignees(){ try{assignees=await api("/api/assignees"); renderAssignees();}catch{} }
 $("login-form").addEventListener("submit", async e => { e.preventDefault(); $("login-error").textContent = ""; try { const result = await api("/api/auth/login", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.fromEntries(new FormData(e.target)))}); token=result.token; user=result.user; sessionStorage.setItem("lamworkorder.token",token); showApp(); } catch(err) { $("login-error").textContent=err.message; } });
 $("create-form").addEventListener("submit", async e => { e.preventDefault(); const button=e.target.querySelector("button[type=submit]"); button.disabled=true; try { const data=new FormData(e.target); const files=data.getAll("attachments").filter(f=>f.size); const payload=Object.fromEntries(data.entries()); delete payload.attachments; payload.storeNumber=Number(payload.storeNumber); payload.assignedTo=payload.assignedTo||null; payload.requestedBy=user.displayName; const created=await api("/api/work-orders",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}); if(files.length){const media=new FormData();files.forEach(f=>media.append("files",f));await api(`/api/work-orders/${created.id}/attachments`,{method:"POST",body:media});} e.target.reset(); $("store").value=user.storeNumber===99?"1":String(user.storeNumber); $("requested-by").value=user.displayName; await load(); } catch(err){$("message").textContent=err.message;} finally{button.disabled=false;} });
 $("filters").addEventListener("click", e => { const value=e.target.dataset.filter;if(!value)return;filter=value;document.querySelectorAll("#filters button").forEach(b=>b.classList.toggle("active",b===e.target));render(); });

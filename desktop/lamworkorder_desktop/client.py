@@ -46,6 +46,9 @@ class ApiClient:
         }
         return self._request("GET", "/api/work-orders", params=params)
 
+    def list_assignees(self) -> list[dict]:
+        return self._request("GET", "/api/assignees")
+
     def create_work_order(self, payload: dict) -> dict:
         return self._request("POST", "/api/work-orders", json=payload)
 

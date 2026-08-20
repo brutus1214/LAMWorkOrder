@@ -138,6 +138,14 @@ def test_assignment_support_lists_technicians_and_notification_recipients(client
     assert technicians.status_code == 200
     assert [user["username"] for user in technicians.json()] == ["technician"]
 
+    assignees = client.get("/api/assignees")
+    assert assignees.status_code == 200
+    assert {user["username"] for user in assignees.json()} == {
+        "employee",
+        "manager",
+        "technician",
+    }
+
     client.post(
         "/api/auth/register",
         json={
@@ -158,6 +166,25 @@ def test_assignment_support_lists_technicians_and_notification_recipients(client
         "jc@example.com",
         "manager3@example.com",
     }
+
+
+def test_admin_can_assign_employee_role(client):
+    requester = next(
+        user for user in client.get("/api/users").json() if user["username"] == "requester"
+    )
+    updated = client.patch(
+        f"/api/users/{requester['id']}",
+        json={
+            "displayName": requester["displayName"],
+            "storeNumber": requester["storeNumber"],
+            "role": "Employee",
+            "email": requester["email"],
+            "phoneNumber": requester["phoneNumber"],
+            "isActive": requester["isActive"],
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["role"] == "Employee"
 
 
 def test_only_jc_can_delete_work_order(client, tmp_path, monkeypatch):

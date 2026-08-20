@@ -25,6 +25,27 @@ def test_client_builds_filter_request(monkeypatch):
     assert "status=New" in request_seen["url"]
 
 
+def test_client_lists_assignees(monkeypatch):
+    request_seen = {}
+
+    def handler(request):
+        request_seen["url"] = str(request.url)
+        return httpx.Response(200, json=[{"displayName": "Employee One"}])
+
+    transport = httpx.MockTransport(handler)
+
+    class TestHttpClient(httpx.Client):
+        def __init__(self, *args, **kwargs):
+            kwargs["transport"] = transport
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "Client", TestHttpClient)
+    assert ApiClient("http://example.test/").list_assignees() == [
+        {"displayName": "Employee One"}
+    ]
+    assert str(request_seen["url"]).endswith("/api/assignees")
+
+
 def test_all_filter_only_shows_recent_work_orders():
     now = datetime(2026, 8, 18, 12, tzinfo=UTC)
     orders = [

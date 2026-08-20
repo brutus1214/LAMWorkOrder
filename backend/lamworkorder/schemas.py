@@ -34,6 +34,7 @@ class Role(StrEnum):
     ADMIN = "Admin"
     MANAGER = "Manager"
     TECHNICIAN = "Technician"
+    EMPLOYEE = "Employee"
     REQUESTER = "Requester"
 
 

@@ -30,6 +30,7 @@ from .work_order_filters import filter_work_orders, format_created_date
 
 FILTERS = ["All", "New", "Open/In Progress", "Completed", "Closed/Cancelled"]
 RANK = {"New": 0, "Scheduled": 1, "InProgress": 2, "Blocked": 3, "Completed": 4, "Cancelled": 5}
+ASSIGNABLE_ROLES = ["Employee", "Manager", "Technician"]
 
 
 class LoginDialog(QDialog):
@@ -67,6 +68,7 @@ class MainWindow(QMainWindow):
         if LoginDialog(self.client, self).exec() != QDialog.DialogCode.Accepted:
             self.close()
             return
+        self.assignees = []
         root = QWidget()
         layout = QVBoxLayout(root)
         brand = QHBoxLayout()
@@ -136,9 +138,9 @@ class MainWindow(QMainWindow):
         self.store.addItems([f"LA Mart {n}" for n in range(1, 51)])
         initial = self.client.user["storeNumber"]
         self.store.setCurrentIndex(0 if initial == 99 else initial - 1)
-        self.title_input, self.requester, self.location, self.assignee = [
-            QLineEdit() for _ in range(4)
-        ]
+        self.title_input, self.requester, self.location = [QLineEdit() for _ in range(3)]
+        self.assignee = QComboBox()
+        self.load_assignees()
         self.requester.setText(self.client.user["displayName"])
         self.requester.setReadOnly(True)
         self.description = QTextEdit()
@@ -195,6 +197,26 @@ class MainWindow(QMainWindow):
         except Exception as error:
             QMessageBox.critical(self, "API unavailable", str(error))
 
+    def load_assignees(self):
+        self.assignee.clear()
+        self.assignee.addItem("Unassigned", None)
+        try:
+            self.assignees = self.client.list_assignees()
+        except Exception:
+            self.assignees = []
+        for role in ASSIGNABLE_ROLES:
+            members = sorted(
+                [user for user in self.assignees if user.get("role") == role],
+                key=lambda user: user.get("displayName", ""),
+            )
+            if not members:
+                continue
+            self.assignee.insertSeparator(self.assignee.count())
+            self.assignee.addItem(role, None)
+            self.assignee.model().item(self.assignee.count() - 1).setEnabled(False)
+            for member in members:
+                self.assignee.addItem(member["displayName"], member["displayName"])
+
     def create_order(self):
         payload = {
             "storeNumber": self.store.currentIndex() + 1,
@@ -203,7 +225,7 @@ class MainWindow(QMainWindow):
             "requestedBy": self.client.user["displayName"],
             "location": self.location.text().strip(),
             "priority": self.priority.currentText(),
-            "assignedTo": self.assignee.text().strip() or None,
+            "assignedTo": self.assignee.currentData(),
         }
         if not all(payload[k] for k in ("title", "description", "location")):
             QMessageBox.warning(self, "Missing details", "Complete all required fields.")
@@ -216,7 +238,7 @@ class MainWindow(QMainWindow):
             self.title_input.clear()
             self.description.clear()
             self.location.clear()
-            self.assignee.clear()
+            self.assignee.setCurrentIndex(0)
             self.attachments = []
             self.attachment_label.setText("No attachments selected")
             self.load_orders()

@@ -11,7 +11,7 @@ import okhttp3.MultipartBody
 
 data class QueueState(
     val orders: List<WorkOrder> = emptyList(), val user: User? = null,
-    val users: List<User> = emptyList(), val technicians: List<User> = emptyList(),
+    val users: List<User> = emptyList(), val assignees: List<User> = emptyList(),
     val notificationRecipients: List<User> = emptyList(),
     val loading: Boolean = false, val error: String? = null,
 )
@@ -25,14 +25,14 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
     fun login(username: String, password: String) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching { api.login(LoginRequest(username.trim(), password)) }
-            .onSuccess { token = it.token; _state.value = QueueState(user = it.user); refresh(); loadTechnicians() }
+            .onSuccess { token = it.token; _state.value = QueueState(user = it.user); refresh(); loadAssignees() }
             .onFailure { _state.value = QueueState(error = it.message ?: "Unable to sign in") }
     }
 
     fun register(request: RegistrationRequest) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching { api.register(request) }
-            .onSuccess { token = it.token; _state.value = QueueState(user = it.user); refresh(); loadTechnicians() }
+            .onSuccess { token = it.token; _state.value = QueueState(user = it.user); refresh(); loadAssignees() }
             .onFailure { _state.value = QueueState(error = it.message ?: "Unable to create user") }
     }
 
@@ -126,13 +126,13 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
             .onFailure { _state.value = _state.value.copy(loading = false, error = it.message) }
     }
 
-    fun loadTechnicians() = viewModelScope.launch {
+    fun loadAssignees() = viewModelScope.launch {
         if (token == null) return@launch
-        runCatching { api.technicians(auth()) }
-            .onSuccess { _state.value = _state.value.copy(technicians = it) }
+        runCatching { api.assignees(auth()) }
+            .onSuccess { _state.value = _state.value.copy(assignees = it) }
             .onFailure {
                 _state.value = _state.value.copy(
-                    error = "Unable to load technicians. Restart the backend, then tap Refresh.",
+                    error = "Unable to load assignees. Restart the backend, then tap Refresh.",
                 )
             }
     }

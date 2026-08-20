@@ -66,6 +66,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { MaterialTheme { WorkOrderApp() } } }
 }
 
+private val assignableRoles = listOf("Employee", "Manager", "Technician")
+
+private fun assigneeRoleRank(role: String): Int =
+    assignableRoles.indexOf(role).let { if (it >= 0) it else assignableRoles.size }
+
 @Composable fun WorkOrderApp(model: WorkOrderViewModel = viewModel()) {
     val state by model.state.collectAsState()
     if (state.user == null) { Login(model, state); return }
@@ -316,7 +321,7 @@ private fun formatUsPhone(input: String): String {
     var menuOpen by remember { mutableStateOf(false) }
     var intakeOpen by remember { mutableStateOf(false) }
     LaunchedEffect(currentUser.id) {
-        if (state.technicians.isEmpty()) model.loadTechnicians()
+        if (state.assignees.isEmpty()) model.loadAssignees()
     }
     if (intakeOpen) {
         BackHandler { intakeOpen = false }
@@ -341,8 +346,8 @@ private fun formatUsPhone(input: String): String {
         /* Previous expanded account actions:
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Column{Text("Work orders",style=MaterialTheme.typography.headlineLarge);Text("${currentUser.displayName} · ${if(currentUser.role=="Admin") "Administrator" else currentUser.role}")};Column{if(currentUser.role in listOf("Admin","Manager")) TextButton(showUsers){Text("Manage Users")};TextButton(showProfile){Text("Profile")};TextButton(model::logout){Text("Logout")}}}
         */
-        Row{OutlinedTextField(search,{search=it},label={Text("Search")},modifier=Modifier.weight(1f));Button({model.refresh(search);model.loadTechnicians()}){Text("Go")}}
-        OutlinedButton({model.refresh(search);model.loadTechnicians()}, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) { Text("Refresh") }
+        Row{OutlinedTextField(search,{search=it},label={Text("Search")},modifier=Modifier.weight(1f));Button({model.refresh(search);model.loadAssignees()}){Text("Go")}}
+        OutlinedButton({model.refresh(search);model.loadAssignees()}, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) { Text("Refresh") }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("All", "New", "Open/In Progress", "Completed", "Closed/Cancelled").forEach { option ->
                 FilterChip(selected = filter == option, onClick = { filter = option }, label = { Text(option) })
@@ -405,7 +410,7 @@ private fun formatUsPhone(input: String): String {
     var role by remember { mutableStateOf(user.role) }; var email by remember { mutableStateOf(user.email.orEmpty()) }
     var phone by remember { mutableStateOf(TextFieldValue(user.phoneNumber.orEmpty())) }; var active by remember { mutableStateOf(user.isActive) }
     var password by remember { mutableStateOf("") }; var roleOpen by remember { mutableStateOf(false) }
-    val roles = if(actor.role=="Admin") listOf("Requester","Technician","Manager","Admin") else listOf("Requester","Technician")
+    val roles = if(actor.role=="Admin") listOf("Requester","Employee","Technician","Manager","Admin") else listOf("Requester","Employee","Technician")
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Edit User", style = MaterialTheme.typography.headlineLarge); Text("@${user.username}")
         OutlinedTextField(name,{name=it},label={Text("Full name")},modifier=Modifier.fillMaxWidth())
@@ -424,10 +429,11 @@ private fun formatUsPhone(input: String): String {
 
 @Composable private fun Profile(model:WorkOrderViewModel,user:User,back:()->Unit){BackHandler{back()};var name by remember{mutableStateOf(user.displayName)};var email by remember{mutableStateOf(user.email.orEmpty())};Column(Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text("Profile",style=MaterialTheme.typography.headlineLarge);Text("${user.username} · ${user.role}");OutlinedTextField(name,{name=it},label={Text("Display name")});OutlinedTextField(email,{email=it},label={Text("Email")});Button({model.updateProfile(name,email,back)},enabled=name.isNotBlank()){Text("Save")};TextButton(back){Text("Cancel")}}}
 
-private fun technicianOptions(state: QueueState): List<User> =
-    (state.technicians + state.users.filter { it.role == "Technician" })
+private fun assigneeOptions(state: QueueState): List<User> =
+    (state.assignees + state.users.filter { it.role in assignableRoles })
+        .filter { it.isActive && it.role in assignableRoles }
         .distinctBy { it.id }
-        .sortedBy { it.displayName }
+        .sortedWith(compareBy<User> { assigneeRoleRank(it.role) }.thenBy { it.displayName })
 
 @Composable private fun Detail(model:WorkOrderViewModel,o:WorkOrder,state:QueueState,back:()->Unit){
     val user = state.user ?: return
@@ -438,8 +444,8 @@ private fun technicianOptions(state: QueueState): List<User> =
     var confirmDelete by remember { mutableStateOf(false) }
     BackHandler { if (confirmDelete) confirmDelete = false else back() }
     LaunchedEffect(o.id, user.role) {
-        if (state.technicians.isEmpty()) {
-            model.loadTechnicians()
+        if (state.assignees.isEmpty()) {
+            model.loadAssignees()
         }
         model.loadNotificationRecipients(o.storeNumber)
         if (user.role in listOf("Admin", "Manager") && state.users.isEmpty()) {
@@ -487,12 +493,12 @@ private fun technicianOptions(state: QueueState): List<User> =
         )
     }
     LazyColumn(Modifier.fillMaxSize().safeDrawingPadding().padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){item{Button(back){Text("Back")}};item{Text(o.workOrderNumber,fontWeight=FontWeight.Bold)}
-        item{WorkOrderSendActions(model,o,state.users + technicianOptions(state),user,title,description,requester,location,priority,assigned,status,note)}
+        item{WorkOrderSendActions(model,o,state.users + assigneeOptions(state),user,title,description,requester,location,priority,assigned,status,note)}
         item{OutlinedTextField(value="LA Mart ${o.storeNumber}",onValueChange={},readOnly=true,label={Text("Store")},supportingText={Text("Set when work order was created")},modifier=Modifier.fillMaxWidth())};item{Field("Title",title,{title=it},full)};item{Field("Description",description,{description=it},full)}
         if(o.attachments.isNotEmpty())item{AttachmentGallery(model,o.attachments)}
         item{Field("Requested by",requester,{requester=it},full)};item{Field("Location",location,{location=it},full)}
         item{SelectionField("Priority",priority,listOf("Low","Normal","High","Emergency"),{priority=it},full)}
-        item{AssigneeDropdown(assigned,technicianOptions(state),{assigned=it},full)}
+        item{AssigneeDropdown(assigned,assigneeOptions(state),{assigned=it},full)}
         item{SelectionField("Status",status,listOf("New","Scheduled","InProgress","Blocked","Completed","Cancelled"),{status=it},statusEdit) { if(it=="InProgress") "In Progress" else it }}
         item{Field("Status note",note,{note=it},statusEdit)}
         if(full)item{Button({
@@ -525,18 +531,22 @@ private fun technicianOptions(state: QueueState): List<User> =
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable private fun AssigneeDropdown(
     assignedTo: String,
-    technicians: List<User>,
+    assignees: List<User>,
     onAssigned: (String) -> Unit,
     enabled: Boolean,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val technicianNames = remember(technicians) {
-        technicians.map { it.displayName }.distinct().sorted()
+    val groupedAssignees = remember(assignees) {
+        assignees
+            .filter { it.role in assignableRoles }
+            .distinctBy { it.id }
+            .sortedWith(compareBy<User> { assigneeRoleRank(it.role) }.thenBy { it.displayName })
+            .groupBy { it.role }
     }
-    val options = remember(technicianNames, assignedTo) {
-        listOf("") + technicianNames +
-            if (assignedTo.isNotBlank() && assignedTo !in technicianNames) listOf(assignedTo) else emptyList()
+    val assigneeNames = remember(groupedAssignees) {
+        groupedAssignees.values.flatten().map { it.displayName }.toSet()
     }
+    val hasAssignees = groupedAssignees.values.any { it.isNotEmpty() }
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { if (enabled) expanded = !expanded },
@@ -550,19 +560,50 @@ private fun technicianOptions(state: QueueState): List<User> =
             label = { Text("Assigned to") },
             supportingText = {
                 Text(
-                    if (technicianNames.isEmpty()) "No technicians loaded. Tap Refresh after backend restart."
-                    else "Optional technician assignment"
+                    if (!hasAssignees) "No employees, managers, or technicians loaded. Tap Refresh after backend restart."
+                    else "Assign to an employee, manager, or technician"
                 )
             },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier.menuAnchor().fillMaxWidth(),
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { option ->
+            DropdownMenuItem(
+                text = { Text("Unassigned") },
+                onClick = {
+                    onAssigned("")
+                    expanded = false
+                },
+            )
+            assignableRoles.forEach { role ->
+                val roleAssignees = groupedAssignees[role].orEmpty()
+                if (roleAssignees.isNotEmpty()) {
+                    DropdownMenuItem(
+                        text = { Text(role, fontWeight = FontWeight.Bold) },
+                        enabled = false,
+                        onClick = {},
+                    )
+                    roleAssignees.forEach { assignee ->
+                        DropdownMenuItem(
+                            text = { Text(assignee.displayName) },
+                            onClick = {
+                                onAssigned(assignee.displayName)
+                                expanded = false
+                            },
+                        )
+                    }
+                }
+            }
+            if (assignedTo.isNotBlank() && assignedTo !in assigneeNames) {
                 DropdownMenuItem(
-                    text = { Text(option.ifBlank { "Unassigned" }) },
+                    text = { Text("Current", fontWeight = FontWeight.Bold) },
+                    enabled = false,
+                    onClick = {},
+                )
+                DropdownMenuItem(
+                    text = { Text(assignedTo) },
                     onClick = {
-                        onAssigned(option)
+                        onAssigned(assignedTo)
                         expanded = false
                     },
                 )
@@ -594,7 +635,7 @@ private fun technicianOptions(state: QueueState): List<User> =
         listOf(currentUser) + users.filter { it.id != currentUser.id }
     }
     val requester = remember(contacts, requestedBy) { findWorkOrderContact(contacts, requestedBy) }
-    val technician = remember(contacts, assignedTo) { findWorkOrderContact(contacts, assignedTo) }
+    val assignee = remember(contacts, assignedTo) { findWorkOrderContact(contacts, assignedTo) }
     val subject = remember(order.workOrderNumber) { workOrderShareSubject(order) }
     val message = workOrderShareText(
         order = order,
@@ -647,21 +688,21 @@ private fun technicianOptions(state: QueueState): List<User> =
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("Text technician") },
-                    enabled = textNumber(technician) != null,
+                    text = { Text("Text assignee") },
+                    enabled = textNumber(assignee) != null,
                     onClick = {
                         sendMenuOpen = false
-                        textWorkOrder(context, textNumber(technician), message)
+                        textWorkOrder(context, textNumber(assignee), message)
                     },
                 )
                 DropdownMenuItem(
-                    text = { Text("Email technician") },
-                    enabled = emailAddress(technician) != null && !preparingEmail,
+                    text = { Text("Email assignee") },
+                    enabled = emailAddress(assignee) != null && !preparingEmail,
                     onClick = {
                         sendMenuOpen = false
                         scope.launch {
                             preparingEmail = true
-                            emailWorkOrder(context, model, order.attachments, emailAddress(technician), subject, message)
+                            emailWorkOrder(context, model, order.attachments, emailAddress(assignee), subject, message)
                             preparingEmail = false
                         }
                     },
@@ -793,7 +834,7 @@ private suspend fun notifyAssignment(
         Toast.makeText(context, "No JC or store manager email found.", Toast.LENGTH_LONG).show()
         return
     }
-    val message = "Technician assigned: $assignedTo\n\n" + workOrderShareText(
+    val message = "Assigned to: $assignedTo\n\n" + workOrderShareText(
         order = order,
         title = title,
         description = description,
@@ -1084,7 +1125,7 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
-        if (state.technicians.isEmpty()) model.loadTechnicians()
+        if (state.assignees.isEmpty()) model.loadAssignees()
         if (user.role in listOf("Admin", "Manager") && state.users.isEmpty()) model.loadUsers()
     }
     LaunchedEffect(store) {
@@ -1154,7 +1195,7 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
         )
         Field("Location", location, { location = it }, true)
         SelectionField("Priority", priority, listOf("Low", "Normal", "High", "Emergency"), { priority = it }, true)
-        AssigneeDropdown(assigned, technicianOptions(state), { assigned = it }, true)
+        AssigneeDropdown(assigned, assigneeOptions(state), { assigned = it }, true)
         Text(
             if (attachments.isEmpty()) "Add photos or videos" else "${attachments.size} attachment(s) selected",
             style = MaterialTheme.typography.titleMedium,
