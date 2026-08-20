@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { MaterialTheme { WorkOrderApp() } } }
 }
 
-private val assignableRoles = listOf("Employee", "Manager", "Technician")
+private val assignableRoles = listOf("Manager", "Employee", "Technician")
 
 private fun assigneeRoleRank(role: String): Int =
     assignableRoles.indexOf(role).let { if (it >= 0) it else assignableRoles.size }
@@ -546,6 +546,7 @@ private fun assigneeOptions(state: QueueState): List<User> =
     enabled: Boolean,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var selectedRole by remember { mutableStateOf<String?>(null) }
     val groupedAssignees = remember(assignees) {
         assignees
             .filter { it.role in assignableRoles }
@@ -557,10 +558,8 @@ private fun assigneeOptions(state: QueueState): List<User> =
             )
             .groupBy { it.role }
     }
-    val assigneeLabels = remember(groupedAssignees) {
-        groupedAssignees.values.flatten().map(::assigneeLabel).toSet()
-    }
     val hasAssignees = groupedAssignees.values.any { it.isNotEmpty() }
+    val roleMembers = selectedRole?.let { groupedAssignees[it].orEmpty() }.orEmpty()
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { if (enabled) expanded = !expanded },
@@ -590,47 +589,57 @@ private fun assigneeOptions(state: QueueState): List<User> =
                 },
             )
             assignableRoles.forEach { role ->
-                val stores = groupedAssignees[role].orEmpty().groupBy { it.storeNumber }
-                if (stores.isNotEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text(role, fontWeight = FontWeight.Bold) },
-                        enabled = false,
-                        onClick = {},
-                    )
-                    stores.forEach { (_, storeAssignees) ->
-                        DropdownMenuItem(
-                            text = { Text(userStoreLabel(storeAssignees.first())) },
-                            enabled = false,
-                            onClick = {},
-                        )
-                        storeAssignees.forEach { assignee ->
-                            val label = assigneeLabel(assignee)
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    onAssigned(label)
-                                    expanded = false
-                                },
-                            )
-                        }
-                    }
-                }
-            }
-            if (assignedTo.isNotBlank() && assignedTo !in assigneeLabels) {
                 DropdownMenuItem(
-                    text = { Text("Current", fontWeight = FontWeight.Bold) },
-                    enabled = false,
-                    onClick = {},
-                )
-                DropdownMenuItem(
-                    text = { Text(assignedTo) },
+                    text = { Text(role) },
+                    enabled = groupedAssignees[role].orEmpty().isNotEmpty(),
                     onClick = {
-                        onAssigned(assignedTo)
                         expanded = false
+                        selectedRole = role
                     },
                 )
             }
         }
+    }
+    selectedRole?.let { role ->
+        AlertDialog(
+            onDismissRequest = { selectedRole = null },
+            title = { Text(role) },
+            text = {
+                if (roleMembers.isEmpty()) {
+                    Text("No $role members loaded.")
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        roleMembers
+                            .groupBy { it.storeNumber }
+                            .forEach { (_, storeAssignees) ->
+                                item {
+                                    Text(
+                                        userStoreLabel(storeAssignees.first()),
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                                items(storeAssignees, key = { it.id }) { assignee ->
+                                    TextButton(
+                                        onClick = {
+                                            onAssigned(assigneeLabel(assignee))
+                                            selectedRole = null
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Text(assigneeLabel(assignee))
+                                    }
+                                }
+                            }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton({ selectedRole = null }) { Text("Cancel") }
+            },
+        )
     }
 }
 
