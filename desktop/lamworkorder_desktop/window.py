@@ -33,6 +33,14 @@ RANK = {"New": 0, "Scheduled": 1, "InProgress": 2, "Blocked": 3, "Completed": 4,
 ASSIGNABLE_ROLES = ["Employee", "Manager", "Technician"]
 
 
+def assignee_store_label(user: dict) -> str:
+    return "All Stores" if user.get("storeNumber") == 99 else f"LA Mart {user.get('storeNumber')}"
+
+
+def assignee_option_label(user: dict) -> str:
+    return f"{user['displayName']} - {assignee_store_label(user)}"
+
+
 class LoginDialog(QDialog):
     def __init__(self, client, parent=None):
         super().__init__(parent)
@@ -215,7 +223,8 @@ class MainWindow(QMainWindow):
             self.assignee.addItem(role, None)
             self.assignee.model().item(self.assignee.count() - 1).setEnabled(False)
             for member in members:
-                self.assignee.addItem(member["displayName"], member["displayName"])
+                label = assignee_option_label(member)
+                self.assignee.addItem(label, label)
 
     def create_order(self):
         payload = {

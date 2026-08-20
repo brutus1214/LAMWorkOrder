@@ -71,6 +71,12 @@ private val assignableRoles = listOf("Employee", "Manager", "Technician")
 private fun assigneeRoleRank(role: String): Int =
     assignableRoles.indexOf(role).let { if (it >= 0) it else assignableRoles.size }
 
+private fun userStoreLabel(user: User): String =
+    if (user.storeNumber == 99) "All Stores" else "LA Mart ${user.storeNumber}"
+
+private fun assigneeLabel(user: User): String =
+    "${user.displayName} - ${userStoreLabel(user)}"
+
 @Composable fun WorkOrderApp(model: WorkOrderViewModel = viewModel()) {
     val state by model.state.collectAsState()
     if (state.user == null) { Login(model, state); return }
@@ -433,7 +439,11 @@ private fun assigneeOptions(state: QueueState): List<User> =
     (state.assignees + state.users.filter { it.role in assignableRoles })
         .filter { it.isActive && it.role in assignableRoles }
         .distinctBy { it.id }
-        .sortedWith(compareBy<User> { assigneeRoleRank(it.role) }.thenBy { it.displayName })
+        .sortedWith(
+            compareBy<User> { assigneeRoleRank(it.role) }
+                .thenBy { it.storeNumber }
+                .thenBy { it.displayName },
+        )
 
 @Composable private fun Detail(model:WorkOrderViewModel,o:WorkOrder,state:QueueState,back:()->Unit){
     val user = state.user ?: return
@@ -540,11 +550,15 @@ private fun assigneeOptions(state: QueueState): List<User> =
         assignees
             .filter { it.role in assignableRoles }
             .distinctBy { it.id }
-            .sortedWith(compareBy<User> { assigneeRoleRank(it.role) }.thenBy { it.displayName })
+            .sortedWith(
+                compareBy<User> { assigneeRoleRank(it.role) }
+                    .thenBy { it.storeNumber }
+                    .thenBy { it.displayName },
+            )
             .groupBy { it.role }
     }
-    val assigneeNames = remember(groupedAssignees) {
-        groupedAssignees.values.flatten().map { it.displayName }.toSet()
+    val assigneeLabels = remember(groupedAssignees) {
+        groupedAssignees.values.flatten().map(::assigneeLabel).toSet()
     }
     val hasAssignees = groupedAssignees.values.any { it.isNotEmpty() }
     ExposedDropdownMenuBox(
@@ -576,25 +590,33 @@ private fun assigneeOptions(state: QueueState): List<User> =
                 },
             )
             assignableRoles.forEach { role ->
-                val roleAssignees = groupedAssignees[role].orEmpty()
-                if (roleAssignees.isNotEmpty()) {
+                val stores = groupedAssignees[role].orEmpty().groupBy { it.storeNumber }
+                if (stores.isNotEmpty()) {
                     DropdownMenuItem(
                         text = { Text(role, fontWeight = FontWeight.Bold) },
                         enabled = false,
                         onClick = {},
                     )
-                    roleAssignees.forEach { assignee ->
+                    stores.forEach { (_, storeAssignees) ->
                         DropdownMenuItem(
-                            text = { Text(assignee.displayName) },
-                            onClick = {
-                                onAssigned(assignee.displayName)
-                                expanded = false
-                            },
+                            text = { Text(userStoreLabel(storeAssignees.first())) },
+                            enabled = false,
+                            onClick = {},
                         )
+                        storeAssignees.forEach { assignee ->
+                            val label = assigneeLabel(assignee)
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onAssigned(label)
+                                    expanded = false
+                                },
+                            )
+                        }
                     }
                 }
             }
-            if (assignedTo.isNotBlank() && assignedTo !in assigneeNames) {
+            if (assignedTo.isNotBlank() && assignedTo !in assigneeLabels) {
                 DropdownMenuItem(
                     text = { Text("Current", fontWeight = FontWeight.Bold) },
                     enabled = false,

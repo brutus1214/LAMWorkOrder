@@ -28,6 +28,7 @@ class WorkOrderSharingTest {
         val users = listOf(user("1", "tech06", "Tech Six"))
 
         assertEquals("1", findWorkOrderContact(users, " tech six ")?.id)
+        assertEquals("1", findWorkOrderContact(users, "Tech Six - LA Mart 1")?.id)
         assertEquals("1", findWorkOrderContact(users, "TECH06")?.id)
         assertNull(findWorkOrderContact(users, "Unknown"))
     }

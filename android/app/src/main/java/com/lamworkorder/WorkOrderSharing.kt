@@ -34,8 +34,12 @@ internal fun findWorkOrderContact(users: List<User>, name: String?): User? {
     val normalizedName = name.normalizedContactName()
     if (normalizedName.isBlank()) return null
     return users.firstOrNull { user ->
-        user.displayName.normalizedContactName() == normalizedName ||
-            user.username.normalizedContactName() == normalizedName
+        val normalizedDisplayName = user.displayName.normalizedContactName()
+        val normalizedUsername = user.username.normalizedContactName()
+        normalizedDisplayName == normalizedName ||
+            normalizedUsername == normalizedName ||
+            "${user.displayName} - ${user.storeAssignmentLabel()}".normalizedContactName() == normalizedName ||
+            normalizedDisplayName == normalizedName.withoutStoreAssignment()
     }
 }
 
@@ -50,3 +54,9 @@ private fun displayStatus(status: String): String =
 
 private fun String?.normalizedContactName(): String =
     orEmpty().trim().lowercase().replace(Regex("\\s+"), " ")
+
+private fun User.storeAssignmentLabel(): String =
+    if (storeNumber == 99) "All Stores" else "LA Mart $storeNumber"
+
+private fun String.withoutStoreAssignment(): String =
+    replace(Regex("\\s+-\\s+(la mart \\d+|all stores)$"), "")

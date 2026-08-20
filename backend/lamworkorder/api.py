@@ -158,7 +158,7 @@ def list_assignees(
     statement = (
         select(User)
         .where(User.role.in_(ASSIGNABLE_ROLES), User.is_active == 1)
-        .order_by(User.role, User.display_name)
+        .order_by(User.role, User.store_number, User.display_name)
     )
     return list(session.scalars(statement))
 
