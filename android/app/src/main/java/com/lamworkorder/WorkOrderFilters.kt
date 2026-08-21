@@ -1,5 +1,6 @@
 package com.lamworkorder
 
+import com.lamworkorder.data.User
 import com.lamworkorder.data.WorkOrder
 import java.time.Instant
 import java.time.LocalDateTime
@@ -24,11 +25,16 @@ internal fun visibleWorkOrders(
     orders: List<WorkOrder>,
     filter: String,
     now: Instant = Instant.now(),
+    currentUser: User? = null,
 ): List<WorkOrder> {
     val cutoff = now.minus(ALL_WORK_ORDER_MAX_AGE_DAYS, ChronoUnit.DAYS)
     return orders
         .filter { order ->
-            FILTER_GROUPS[filter]?.contains(order.status) ?: order.createdAfter(cutoff)
+            when (filter) {
+                "Me" -> order.hasUserName(currentUser)
+                "All" -> order.createdAfter(cutoff)
+                else -> FILTER_GROUPS[filter]?.contains(order.status) ?: order.createdAfter(cutoff)
+            }
         }
         .sortedWith(
             compareBy<WorkOrder> {
@@ -58,8 +64,31 @@ private fun WorkOrder.createdAfter(cutoff: Instant): Boolean {
     return created.isAfter(cutoff)
 }
 
+private fun WorkOrder.hasUserName(user: User?): Boolean {
+    if (user == null) return false
+    val names = setOf(
+        user.displayName.normalizedName(),
+        user.username.normalizedName(),
+        "${user.displayName} - ${user.storeLabel()}".normalizedName(),
+    )
+    return listOf(requestedBy, assignedTo)
+        .map { it.normalizedName() }
+        .any { field ->
+            field in names || field.withoutStoreLabel() == user.displayName.normalizedName()
+        }
+}
+
 private fun parseCreatedAt(value: String): Instant? =
     runCatching { OffsetDateTime.parse(value).toInstant() }
         .recoverCatching { Instant.parse(value) }
         .recoverCatching { LocalDateTime.parse(value).toInstant(ZoneOffset.UTC) }
         .getOrNull()
+
+private fun User.storeLabel(): String =
+    if (storeNumber == 99) "All Stores" else "LA Mart $storeNumber"
+
+private fun String?.normalizedName(): String =
+    orEmpty().trim().lowercase().replace(Regex("\\s+"), " ")
+
+private fun String.withoutStoreLabel(): String =
+    replace(Regex("\\s+-\\s+(la mart \\d+|all stores)$"), "")

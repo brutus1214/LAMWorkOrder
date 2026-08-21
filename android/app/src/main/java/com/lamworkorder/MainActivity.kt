@@ -346,7 +346,9 @@ private fun formatUsPhone(input: String): String {
         Intake(model, state) { intakeOpen = false }
         return
     }
-    val visibleOrders = remember(state.orders, filter) { visibleWorkOrders(state.orders, filter) }
+    val visibleOrders = remember(state.orders, filter, currentUser) {
+        visibleWorkOrders(state.orders, filter, currentUser = currentUser)
+    }
     Box(Modifier.fillMaxSize().background(Color(0xFFF0F4F7)).safeDrawingPadding()) {
       Column(Modifier.fillMaxSize().padding(16.dp).padding(bottom = 58.dp), verticalArrangement=Arrangement.spacedBy(10.dp)) {
         BrandLogo(Modifier.fillMaxWidth().height(54.dp))
@@ -367,7 +369,7 @@ private fun formatUsPhone(input: String): String {
         Row{OutlinedTextField(search,{search=it},label={Text("Search")},modifier=Modifier.weight(1f));Button({model.refresh(search);model.loadAssignees()}){Text("Go")}}
         OutlinedButton({model.refresh(search);model.loadAssignees()}, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) { Text("Refresh") }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("All", "New", "Open/In Progress", "Completed", "Closed/Cancelled").forEach { option ->
+            listOf("Me", "All", "New", "Open/In Progress", "Completed", "Closed/Cancelled").forEach { option ->
                 FilterChip(selected = filter == option, onClick = { filter = option }, label = { Text(option) })
             }
         }
