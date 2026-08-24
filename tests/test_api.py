@@ -21,7 +21,22 @@ def test_dashboard_css_keeps_hidden_views_hidden(client):
     response = client.get("/assets/app.css")
 
     assert response.status_code == 200
-    assert "[hidden]{display:none!important}" in response.text
+    assert "[hidden]{display:none!important;}" in response.text.replace(" ", "").replace("\n", "")
+
+
+def test_dashboard_has_mobile_queue_layout_assets(client):
+    dashboard = client.get("/")
+    styles = client.get("/assets/app.css")
+    script = client.get("/assets/app.js")
+
+    assert dashboard.status_code == 200
+    assert 'id="mobile-create-toggle"' in dashboard.text
+    assert 'data-filter="Me"' in dashboard.text
+    assert "app.css?v=20260824-mobile" in dashboard.text
+    assert "@media (max-width: 700px)" in styles.text
+    assert "table,\n  tbody,\n  tr,\n  td" in styles.text
+    assert "setMobileIntakeOpen" in script.text
+    assert "matchesCurrentUser" in script.text
 
 
 def test_jc_registration_is_all_store_administrator(client):

@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#10253f"><title>LA Mart Work Orders</title>
   <link rel="icon" href="/assets/app-icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/app.css?v=20260824"><link rel="stylesheet" href="/assets/work-orders.css"><script src="/assets/app.js" defer></script>
+  <link rel="stylesheet" href="/assets/app.css?v=20260824-mobile"><link rel="stylesheet" href="/assets/work-orders.css"><script src="/assets/app.js?v=20260824-mobile" defer></script>
 </head>
 <body>
 <section id="login-view" class="auth-shell">
@@ -26,10 +26,10 @@
     <section class="metrics"><article><span>Total</span><strong id="total">—</strong></article><article><span>Urgent</span><strong id="urgent">—</strong></article><article><span>In progress</span><strong id="progress">—</strong></article></section>
     <section class="workspace">
       <div class="queue card"><div class="toolbar"><div><h2>Active queue</h2><p id="message"></p></div><input id="search" type="search" placeholder="Search number, title, location"><button id="refresh" class="secondary">Refresh</button></div>
-        <div id="filters" class="filters"><button data-filter="All">All</button><button data-filter="New" class="active">New</button><button data-filter="Open">Open/In Progress</button><button data-filter="Completed">Completed</button><button data-filter="Closed">Closed/Cancelled</button></div>
+        <div id="filters" class="filters"><button data-filter="Me">Me</button><button data-filter="All">All</button><button data-filter="New" class="active">New</button><button data-filter="Open">Open/In Progress</button><button data-filter="Completed">Completed</button><button data-filter="Closed">Closed/Cancelled</button></div>
         <div class="table-wrap"><table><thead><tr><th>Number</th><th>Work</th><th>Priority</th><th>Status</th><th>Owner</th></tr></thead><tbody id="orders"></tbody></table></div>
       </div>
-      <form id="create-form" class="card intake"><div><span class="eyebrow">INTAKE</span><h2>New work order</h2></div>
+      <form id="create-form" class="card intake"><div class="form-title-row"><div><span class="eyebrow">INTAKE</span><h2>New work order</h2></div><button type="button" id="close-create" class="secondary mobile-only">Back</button></div>
         <label>Store<select name="storeNumber" id="store"></select></label><label>Title<input name="title" required maxlength="120"></label><label>Description<textarea name="description" required maxlength="2000"></textarea></label>
         <label>Requested by<input id="requested-by" readonly></label><label>Location<input name="location" required maxlength="160"></label>
         <label>Priority<select name="priority"><option>Normal</option><option>Low</option><option>High</option><option>Emergency</option></select></label><label>Assigned to<select name="assignedTo" id="assigned-to"><option value="">Unassigned</option></select></label>
@@ -37,6 +37,7 @@
       </form>
     </section>
   </main>
+  <button type="button" id="mobile-create-toggle" class="mobile-create-button mobile-only">New Work Order</button>
 </div>
 <dialog id="profile-dialog"><form id="profile-form" method="dialog"><h2>Profile</h2><p id="profile-meta"></p><label>Display name<input name="displayName" required maxlength="120"></label><label>Email<input name="email" type="email" maxlength="254"></label><p id="profile-error" class="error"></p><div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button value="default" type="submit">Save</button></div></form></dialog>
 </body></html>
