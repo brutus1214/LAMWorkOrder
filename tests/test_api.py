@@ -17,6 +17,13 @@ def test_health(client):
     assert response.json()["status"] == "ok"
 
 
+def test_dashboard_css_keeps_hidden_views_hidden(client):
+    response = client.get("/assets/app.css")
+
+    assert response.status_code == 200
+    assert "[hidden]{display:none!important}" in response.text
+
+
 def test_jc_registration_is_all_store_administrator(client):
     response = client.post(
         "/api/auth/register",
