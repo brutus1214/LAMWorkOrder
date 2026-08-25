@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#10253f"><title>LA Mart Work Orders</title>
   <link rel="icon" href="/assets/app-icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/app.css?v=20260824-mobile"><link rel="stylesheet" href="/assets/work-orders.css"><script src="/assets/app.js?v=20260824-mobile" defer></script>
+  <link rel="stylesheet" href="/assets/app.css?v=20260825-detail"><link rel="stylesheet" href="/assets/work-orders.css"><script src="/assets/app.js?v=20260825-detail" defer></script>
 </head>
 <body>
 <section id="login-view" class="auth-shell">
@@ -40,4 +40,11 @@
   <button type="button" id="mobile-create-toggle" class="mobile-create-button mobile-only">New Work Order</button>
 </div>
 <dialog id="profile-dialog"><form id="profile-form" method="dialog"><h2>Profile</h2><p id="profile-meta"></p><label>Display name<input name="displayName" required maxlength="120"></label><label>Email<input name="email" type="email" maxlength="254"></label><p id="profile-error" class="error"></p><div class="dialog-actions"><button value="cancel" class="secondary">Cancel</button><button value="default" type="submit">Save</button></div></form></dialog>
+<dialog id="work-order-dialog" class="detail-dialog">
+  <div class="detail-shell">
+    <button type="button" id="close-work-order" class="secondary">Back</button>
+    <div id="work-order-detail"></div>
+    <p id="work-order-error" class="error" role="alert"></p>
+  </div>
+</dialog>
 </body></html>

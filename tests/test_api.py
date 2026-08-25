@@ -32,11 +32,17 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert dashboard.status_code == 200
     assert 'id="mobile-create-toggle"' in dashboard.text
     assert 'data-filter="Me"' in dashboard.text
-    assert "app.css?v=20260824-mobile" in dashboard.text
+    assert 'id="work-order-dialog"' in dashboard.text
+    assert "app.css?v=20260825-detail" in dashboard.text
+    assert "app.js?v=20260825-detail" in dashboard.text
     assert "@media (max-width: 700px)" in styles.text
     assert "table,\n  tbody,\n  tr,\n  td" in styles.text
+    assert "flex-wrap: wrap" in styles.text
+    assert "detail-dialog" in styles.text
     assert "setMobileIntakeOpen" in script.text
     assert "matchesCurrentUser" in script.text
+    assert "openWorkOrderDetail" in script.text
+    assert "data-order-id" in script.text
 
 
 def test_jc_registration_is_all_store_administrator(client):
