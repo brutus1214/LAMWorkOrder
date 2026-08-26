@@ -8,7 +8,7 @@ const statusRank = {
   Completed: 4,
   Cancelled: 5,
 };
-const assignableRoleOrder = ["Employee", "Manager", "Technician"];
+const assignableRoleOrder = ["Admin", "Manager", "Employee", "Technician"];
 const allMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
 
 let token = sessionStorage.getItem("lamworkorder.token");
@@ -84,11 +84,12 @@ function showApp() {
   $("account-name").textContent = `${user.displayName} - ${user.role}`;
   $("requested-by").value = user.displayName;
   $("manage-users").hidden = !["Admin", "Manager"].includes(user.role);
-  $("store").innerHTML = Array.from(
-    { length: 50 },
-    (_, index) => `<option value="${index + 1}">LA Mart ${index + 1}</option>`,
-  ).join("");
-  $("store").value = user.storeNumber === 99 ? "1" : String(user.storeNumber);
+  const stores =
+    user.role === "Admin" ? Array.from({ length: 50 }, (_, index) => index + 1) : [user.storeNumber];
+  $("store").innerHTML = stores
+    .map((storeNumber) => `<option value="${storeNumber}">LA Mart ${storeNumber}</option>`)
+    .join("");
+  $("store").value = user.role === "Admin" && user.storeNumber === 99 ? "1" : String(user.storeNumber);
   load();
   loadAssignees();
 }

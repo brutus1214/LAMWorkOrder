@@ -11,6 +11,27 @@ PAYLOAD = {
 }
 
 
+def register_jc(client):
+    return client.post(
+        "/api/auth/register",
+        json={
+            "username": "jc",
+            "password": "secure-password",
+            "displayName": "James Chang",
+            "storeNumber": 1,
+            "email": "jc@example.com",
+            "phoneNumber": "202-555-0100",
+        },
+    )
+
+
+def auth_headers(client, username: str) -> dict[str, str]:
+    response = client.post(
+        "/api/auth/login", json={"username": username, "password": "test-password"}
+    )
+    return {"Authorization": f"Bearer {response.json()['token']}"}
+
+
 def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
@@ -33,8 +54,8 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert 'id="mobile-create-toggle"' in dashboard.text
     assert 'data-filter="Me"' in dashboard.text
     assert 'id="work-order-dialog"' in dashboard.text
-    assert "app.css?v=20260825-detail" in dashboard.text
-    assert "app.js?v=20260825-detail" in dashboard.text
+    assert "app.css?v=20260826-permissions" in dashboard.text
+    assert "app.js?v=20260826-permissions" in dashboard.text
     assert "@media (max-width: 700px)" in styles.text
     assert "table,\n  tbody,\n  tr,\n  td" in styles.text
     assert "flex-wrap: wrap" in styles.text
@@ -43,20 +64,11 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert "matchesCurrentUser" in script.text
     assert "openWorkOrderDetail" in script.text
     assert "data-order-id" in script.text
+    assert '"Admin", "Manager", "Employee", "Technician"' in script.text
 
 
 def test_jc_registration_is_all_store_administrator(client):
-    response = client.post(
-        "/api/auth/register",
-        json={
-            "username": "jc",
-            "password": "secure-password",
-            "displayName": "James Chang",
-            "storeNumber": 1,
-            "email": "jc@example.com",
-            "phoneNumber": "202-555-0100",
-        },
-    )
+    response = register_jc(client)
     assert response.status_code == 201
     assert response.json()["user"]["role"] == "Admin"
     assert response.json()["user"]["storeNumber"] == 99
@@ -68,11 +80,10 @@ def test_login_profile_and_permissions(client):
         "/api/profile", json={"displayName": "Lead Admin", "email": "lead@example.com"}
     )
     assert profile.json()["displayName"] == "Lead Admin"
-    login = client.post(
-        "/api/auth/login", json={"username": "requester", "password": "test-password"}
-    )
-    requester = {"Authorization": f"Bearer {login.json()['token']}"}
-    created = client.post("/api/work-orders", json=PAYLOAD, headers=requester).json()
+    requester = auth_headers(client, "requester")
+    created = client.post(
+        "/api/work-orders", json={**PAYLOAD, "storeNumber": 1}, headers=requester
+    ).json()
     assert created["requestedBy"] == "Requester"
     denied = client.put(
         f"/api/work-orders/{created['id']}",
@@ -86,11 +97,10 @@ def test_requester_can_attach_media_to_new_work_order(client, tmp_path, monkeypa
     import lamworkorder.api as api
 
     monkeypatch.setattr(api, "UPLOADS", tmp_path)
-    login = client.post(
-        "/api/auth/login", json={"username": "requester", "password": "test-password"}
-    )
-    requester = {"Authorization": f"Bearer {login.json()['token']}"}
-    created = client.post("/api/work-orders", json=PAYLOAD, headers=requester).json()
+    requester = auth_headers(client, "requester")
+    created = client.post(
+        "/api/work-orders", json={**PAYLOAD, "storeNumber": 1}, headers=requester
+    ).json()
     uploaded = client.post(
         f"/api/work-orders/{created['id']}/attachments",
         files=[("files", ("proof.jpg", b"jpeg", "image/jpeg"))],
@@ -161,30 +171,95 @@ def test_create_list_filter_and_update(client):
     assert updated.json()["statusNote"] == "Technician dispatched"
 
 
+def test_non_admins_can_only_write_work_orders_for_their_store(client, tmp_path, monkeypatch):
+    import lamworkorder.api as api
+
+    monkeypatch.setattr(api, "UPLOADS", tmp_path)
+    manager = auth_headers(client, "manager")
+    technician = auth_headers(client, "technician")
+    requester = auth_headers(client, "requester")
+
+    other_store = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 4, "title": "Other store order"},
+    ).json()
+    manager_store = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 3, "title": "Manager store order"},
+    ).json()
+    technician_store = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 1, "title": "Technician store order"},
+    ).json()
+
+    denied_create = client.post("/api/work-orders", json=PAYLOAD, headers=requester)
+    assert denied_create.status_code == 403
+
+    denied_edit = client.put(
+        f"/api/work-orders/{other_store['id']}",
+        json={**PAYLOAD, "status": "Scheduled", "statusNote": "planned"},
+        headers=manager,
+    )
+    assert denied_edit.status_code == 403
+
+    allowed_edit = client.put(
+        f"/api/work-orders/{manager_store['id']}",
+        json={**PAYLOAD, "status": "Scheduled", "statusNote": "planned"},
+        headers=manager,
+    )
+    assert allowed_edit.status_code == 200
+
+    denied_status = client.patch(
+        f"/api/work-orders/{other_store['id']}/status",
+        json={"status": "InProgress", "note": "wrong store"},
+        headers=technician,
+    )
+    assert denied_status.status_code == 403
+
+    allowed_status = client.patch(
+        f"/api/work-orders/{technician_store['id']}/status",
+        json={"status": "InProgress", "note": "same store"},
+        headers=technician,
+    )
+    assert allowed_status.status_code == 200
+
+    denied_upload = client.post(
+        f"/api/work-orders/{other_store['id']}/attachments",
+        files=[("files", ("proof.jpg", b"jpeg", "image/jpeg"))],
+        headers=requester,
+    )
+    assert denied_upload.status_code == 403
+
+    uploaded = client.post(
+        f"/api/work-orders/{other_store['id']}/attachments",
+        files=[("files", ("proof.jpg", b"jpeg", "image/jpeg"))],
+    ).json()
+    denied_delete = client.delete(
+        f"/api/attachments/{uploaded[0]['id']}",
+        headers=manager,
+    )
+    assert denied_delete.status_code == 403
+
+
 def test_assignment_support_lists_technicians_and_notification_recipients(client):
     technicians = client.get("/api/technicians")
     assert technicians.status_code == 200
     assert [user["username"] for user in technicians.json()] == ["technician"]
 
+    assert register_jc(client).status_code == 201
+
     assignees = client.get("/api/assignees")
     assert assignees.status_code == 200
     assert {user["username"] for user in assignees.json()} == {
+        "jc",
         "employee",
         "manager",
         "technician",
     }
+    assert next(user for user in assignees.json() if user["username"] == "jc")[
+        "displayName"
+    ] == "James Chang"
 
-    client.post(
-        "/api/auth/register",
-        json={
-            "username": "jc",
-            "password": "secure-password",
-            "displayName": "James Chang",
-            "storeNumber": 1,
-            "email": "jc@example.com",
-            "phoneNumber": "202-555-0100",
-        },
-    )
     recipients = client.get(
         "/api/work-order-notification-recipients",
         params={"storeNumber": 3},
@@ -231,17 +306,7 @@ def test_only_jc_can_delete_work_order(client, tmp_path, monkeypatch):
     assert denied.status_code == 403
     assert client.get(f"/api/work-orders/{created['id']}").status_code == 200
 
-    jc = client.post(
-        "/api/auth/register",
-        json={
-            "username": "jc",
-            "password": "secure-password",
-            "displayName": "James Chang",
-            "storeNumber": 1,
-            "email": "jc@example.com",
-            "phoneNumber": "202-555-0100",
-        },
-    ).json()
+    jc = register_jc(client).json()
     deleted = client.delete(
         f"/api/work-orders/{created['id']}",
         headers={"Authorization": f"Bearer {jc['token']}"},

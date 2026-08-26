@@ -30,7 +30,7 @@ from .work_order_filters import filter_work_orders, format_created_date
 
 FILTERS = ["All", "New", "Open/In Progress", "Completed", "Closed/Cancelled"]
 RANK = {"New": 0, "Scheduled": 1, "InProgress": 2, "Blocked": 3, "Completed": 4, "Cancelled": 5}
-ASSIGNABLE_ROLES = ["Employee", "Manager", "Technician"]
+ASSIGNABLE_ROLES = ["Admin", "Manager", "Employee", "Technician"]
 
 
 def assignee_store_label(user: dict) -> str:
@@ -143,9 +143,14 @@ class MainWindow(QMainWindow):
         title.setObjectName("sectionHeading")
         form.addRow(title)
         self.store = QComboBox()
-        self.store.addItems([f"LA Mart {n}" for n in range(1, 51)])
         initial = self.client.user["storeNumber"]
-        self.store.setCurrentIndex(0 if initial == 99 else initial - 1)
+        if self.client.user["role"] == "Admin":
+            for store_number in range(1, 51):
+                self.store.addItem(f"LA Mart {store_number}", store_number)
+            self.store.setCurrentIndex(0 if initial == 99 else initial - 1)
+        else:
+            self.store.addItem(f"LA Mart {initial}", initial)
+            self.store.setEnabled(False)
         self.title_input, self.requester, self.location = [QLineEdit() for _ in range(3)]
         self.assignee = QComboBox()
         self.load_assignees()
@@ -228,7 +233,7 @@ class MainWindow(QMainWindow):
 
     def create_order(self):
         payload = {
-            "storeNumber": self.store.currentIndex() + 1,
+            "storeNumber": self.store.currentData(),
             "title": self.title_input.text().strip(),
             "description": self.description.toPlainText().strip(),
             "requestedBy": self.client.user["displayName"],

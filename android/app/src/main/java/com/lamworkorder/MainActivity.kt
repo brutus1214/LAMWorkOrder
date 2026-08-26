@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { MaterialTheme { WorkOrderApp() } } }
 }
 
-private val assignableRoles = listOf("Manager", "Employee", "Technician")
+private val assignableRoles = listOf("Admin", "Manager", "Employee", "Technician")
 
 private fun assigneeRoleRank(role: String): Int =
     assignableRoles.indexOf(role).let { if (it >= 0) it else assignableRoles.size }
@@ -293,19 +293,22 @@ private fun formatUsPhone(input: String): String {
     selectedStore: Int,
     onStoreSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    stores: List<Int> = listOf(99) + (1..9),
+    enabled: Boolean = true,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val stores = remember { listOf(99) + (1..9) }
+    val storeOptions = remember(stores) { stores.distinct() }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
+        onExpandedChange = { if (enabled) expanded = !expanded },
         modifier = modifier,
     ) {
         OutlinedTextField(
             value = if (selectedStore == 99) "LA Mart 99 — All Stores" else "LA Mart $selectedStore",
             onValueChange = {},
             readOnly = true,
+            enabled = enabled,
             label = { Text("Store") },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier.menuAnchor().fillMaxWidth(),
@@ -314,7 +317,7 @@ private fun formatUsPhone(input: String): String {
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
-            stores.forEach { storeNumber ->
+            storeOptions.forEach { storeNumber ->
                 DropdownMenuItem(
                     text = {
                         Text(
@@ -613,8 +616,8 @@ private fun assigneeOptions(state: QueueState): List<User> =
             label = { Text("Assigned to") },
             supportingText = {
                 Text(
-                    if (!hasAssignees) "No employees, managers, or technicians loaded. Tap Refresh after backend restart."
-                    else "Assign to an employee, manager, or technician"
+                    if (!hasAssignees) "No assignees loaded. Tap Refresh after backend restart."
+                    else "Assign to James Chang, a manager, employee, or technician"
                 )
             },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
@@ -1287,6 +1290,9 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
     var submitting by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var assignmentSendRequest by remember { mutableStateOf<AssignmentSendRequest?>(null) }
+    val storeChoices = remember(user.role, user.storeNumber) {
+        if (user.role == "Admin") listOf(99) + (1..9) else listOf(user.storeNumber)
+    }
     val assignmentContacts = remember(user, state.users, state.assignees) {
         (listOf(user) + state.users + assigneeOptions(state)).distinctBy { it.id }
     }
@@ -1368,7 +1374,13 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
         }}},
     ) { contentPadding ->
       Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(contentPadding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        StoreDropdown(store, { store = it }, Modifier.fillMaxWidth())
+        StoreDropdown(
+            store,
+            { store = it },
+            Modifier.fillMaxWidth(),
+            stores = storeChoices,
+            enabled = user.role == "Admin",
+        )
         Field("Title", title, { title = it }, true)
         Field("Description", description, { description = it }, true)
         OutlinedTextField(

@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from .auth import current_user, hash_password, issue_token, require_roles, verify_password
@@ -41,6 +41,7 @@ ALLOWED_TYPES = {
     "video/webm",
 }
 ASSIGNABLE_ROLES = ("Employee", "Manager", "Technician")
+SPECIAL_ASSIGNEE_USERNAMES = ("jc",)
 
 
 def repository(session: Session = Depends(get_session)) -> WorkOrderRepository:
@@ -52,6 +53,16 @@ def find_order(work_order_id: UUID, repo: WorkOrderRepository):
     if not item:
         raise HTTPException(status_code=404, detail="Work order not found")
     return item
+
+
+def require_work_order_store(user: User, item, action: str = "modify") -> None:
+    if user.role == "Admin":
+        return
+    if user.store_number != item.store_number:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Only an Administrator can {action} work orders for another store",
+        )
 
 
 @router.get("/health", response_model=Health, tags=["system"])
@@ -157,7 +168,13 @@ def list_assignees(
 ):
     statement = (
         select(User)
-        .where(User.role.in_(ASSIGNABLE_ROLES), User.is_active == 1)
+        .where(
+            User.is_active == 1,
+            or_(
+                User.role.in_(ASSIGNABLE_ROLES),
+                User.username.in_(SPECIAL_ASSIGNEE_USERNAMES),
+            ),
+        )
         .order_by(User.role, User.store_number, User.display_name)
     )
     return list(session.scalars(statement))
@@ -265,7 +282,12 @@ def create_work_order(
     repo: WorkOrderRepository = Depends(repository),
     user: User = Depends(current_user),
 ):
-    request = request.model_copy(update={'requested_by': user.display_name})
+    if user.role != "Admin" and request.store_number != user.store_number:
+        raise HTTPException(
+            status_code=403,
+            detail="Only an Administrator can create work orders for another store",
+        )
+    request = request.model_copy(update={"requested_by": user.display_name})
     return repo.create(request, user.id)
 
 
@@ -274,9 +296,11 @@ def update_work_order(
     work_order_id: UUID,
     request: WorkOrderUpdate,
     repo: WorkOrderRepository = Depends(repository),
-    _: User = Depends(require_roles("Admin", "Manager")),
+    user: User = Depends(require_roles("Admin", "Manager")),
 ):
-    return repo.update(find_order(work_order_id, repo), request)
+    item = find_order(work_order_id, repo)
+    require_work_order_store(user, item)
+    return repo.update(item, request)
 
 
 @router.patch(
@@ -286,9 +310,11 @@ def update_status(
     work_order_id: UUID,
     request: StatusUpdate,
     repo: WorkOrderRepository = Depends(repository),
-    _: User = Depends(require_roles("Admin", "Manager", "Technician")),
+    user: User = Depends(require_roles("Admin", "Manager", "Technician")),
 ):
-    return repo.update_status(find_order(work_order_id, repo), request)
+    item = find_order(work_order_id, repo)
+    require_work_order_store(user, item)
+    return repo.update_status(item, request)
 
 
 @router.post(
@@ -304,6 +330,7 @@ async def upload_attachments(
     user: User = Depends(current_user),
 ):
     item = find_order(work_order_id, repo)
+    require_work_order_store(user, item)
     if not files:
         raise HTTPException(status_code=422, detail="At least one file is required")
     UPLOADS.mkdir(parents=True, exist_ok=True)
@@ -350,11 +377,12 @@ def attachment_content(
 def delete_attachment(
     attachment_id: UUID,
     session: Session = Depends(get_session),
-    _: User = Depends(require_roles("Admin", "Manager")),
+    user: User = Depends(require_roles("Admin", "Manager")),
 ):
     attachment = session.get(Attachment, str(attachment_id))
     if not attachment:
         raise HTTPException(status_code=404, detail="Attachment not found")
+    require_work_order_store(user, attachment.work_order)
     path = UPLOADS / attachment.stored_name
     session.delete(attachment)
     session.commit()
