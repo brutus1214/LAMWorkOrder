@@ -54,8 +54,8 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert 'id="mobile-create-toggle"' in dashboard.text
     assert 'data-filter="Me"' in dashboard.text
     assert 'id="work-order-dialog"' in dashboard.text
-    assert "app.css?v=20260826-media" in dashboard.text
-    assert "app.js?v=20260826-media" in dashboard.text
+    assert "app.css?v=20260827-security" in dashboard.text
+    assert "app.js?v=20260827-security" in dashboard.text
     assert "@media (max-width: 700px)" in styles.text
     assert "table,\n  tbody,\n  tr,\n  td" in styles.text
     assert "flex-wrap: wrap" in styles.text
@@ -68,7 +68,7 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert "URL.createObjectURL" in script.text
     assert "attachment-card" in styles.text
     assert "data-order-id" in script.text
-    assert '"Admin", "Manager", "Employee", "Technician"' in script.text
+    assert '"Admin", "Manager", "Employee", "Security", "Technician"' in script.text
 
 
 def test_jc_registration_is_all_store_administrator(client):
@@ -258,6 +258,7 @@ def test_assignment_support_lists_technicians_and_notification_recipients(client
         "jc",
         "employee",
         "manager",
+        "security",
         "technician",
     }
     assert next(user for user in assignees.json() if user["username"] == "jc")[
@@ -292,6 +293,25 @@ def test_admin_can_assign_employee_role(client):
     )
     assert updated.status_code == 200
     assert updated.json()["role"] == "Employee"
+
+
+def test_admin_can_assign_security_role(client):
+    requester = next(
+        user for user in client.get("/api/users").json() if user["username"] == "requester"
+    )
+    updated = client.patch(
+        f"/api/users/{requester['id']}",
+        json={
+            "displayName": requester["displayName"],
+            "storeNumber": requester["storeNumber"],
+            "role": "Security",
+            "email": requester["email"],
+            "phoneNumber": requester["phoneNumber"],
+            "isActive": requester["isActive"],
+        },
+    )
+    assert updated.status_code == 200
+    assert updated.json()["role"] == "Security"
 
 
 def test_only_jc_can_delete_work_order(client, tmp_path, monkeypatch):

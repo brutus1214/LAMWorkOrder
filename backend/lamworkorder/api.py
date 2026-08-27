@@ -40,7 +40,7 @@ ALLOWED_TYPES = {
     "video/quicktime",
     "video/webm",
 }
-ASSIGNABLE_ROLES = ("Employee", "Manager", "Technician")
+ASSIGNABLE_ROLES = ("Employee", "Manager", "Security", "Technician")
 SPECIAL_ASSIGNEE_USERNAMES = ("jc",)
 
 

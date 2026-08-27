@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { MaterialTheme { WorkOrderApp() } } }
 }
 
-private val assignableRoles = listOf("Admin", "Manager", "Employee", "Technician")
+private val assignableRoles = listOf("Admin", "Manager", "Employee", "Security", "Technician")
 
 private fun assigneeRoleRank(role: String): Int =
     assignableRoles.indexOf(role).let { if (it >= 0) it else assignableRoles.size }
@@ -433,7 +433,7 @@ private fun formatUsPhone(input: String): String {
     var role by remember { mutableStateOf(user.role) }; var email by remember { mutableStateOf(user.email.orEmpty()) }
     var phone by remember { mutableStateOf(TextFieldValue(user.phoneNumber.orEmpty())) }; var active by remember { mutableStateOf(user.isActive) }
     var password by remember { mutableStateOf("") }; var roleOpen by remember { mutableStateOf(false) }
-    val roles = if(actor.role=="Admin") listOf("Requester","Employee","Technician","Manager","Admin") else listOf("Requester","Employee","Technician")
+    val roles = if(actor.role=="Admin") listOf("Requester","Employee","Security","Technician","Manager","Admin") else listOf("Requester","Employee","Security","Technician")
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Edit User", style = MaterialTheme.typography.headlineLarge); Text("@${user.username}")
         OutlinedTextField(name,{name=it},label={Text("Full name")},modifier=Modifier.fillMaxWidth())
@@ -617,7 +617,7 @@ private fun assigneeOptions(state: QueueState): List<User> =
             supportingText = {
                 Text(
                     if (!hasAssignees) "No assignees loaded. Tap Refresh after backend restart."
-                    else "Assign to James Chang, a manager, employee, or technician"
+                    else "Assign to James Chang, a manager, employee, security, or technician"
                 )
             },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },

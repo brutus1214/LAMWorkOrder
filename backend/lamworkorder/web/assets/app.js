@@ -8,7 +8,7 @@ const statusRank = {
   Completed: 4,
   Cancelled: 5,
 };
-const assignableRoleOrder = ["Admin", "Manager", "Employee", "Technician"];
+const assignableRoleOrder = ["Admin", "Manager", "Employee", "Security", "Technician"];
 const allMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
 
 let token = sessionStorage.getItem("lamworkorder.token");

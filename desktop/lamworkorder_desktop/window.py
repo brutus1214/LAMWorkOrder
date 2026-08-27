@@ -30,7 +30,7 @@ from .work_order_filters import filter_work_orders, format_created_date
 
 FILTERS = ["All", "New", "Open/In Progress", "Completed", "Closed/Cancelled"]
 RANK = {"New": 0, "Scheduled": 1, "InProgress": 2, "Blocked": 3, "Completed": 4, "Cancelled": 5}
-ASSIGNABLE_ROLES = ["Admin", "Manager", "Employee", "Technician"]
+ASSIGNABLE_ROLES = ["Admin", "Manager", "Employee", "Security", "Technician"]
 
 
 def assignee_store_label(user: dict) -> str:

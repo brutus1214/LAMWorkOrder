@@ -24,6 +24,7 @@ def client():
         for username, role, store_number, email in [
             ("admin", "Admin", 1, None),
             ("employee", "Employee", 1, "employee@example.com"),
+            ("security", "Security", 1, "security@example.com"),
             ("technician", "Technician", 1, "technician@example.com"),
             ("requester", "Requester", 1, None),
             ("manager", "Manager", 3, "manager3@example.com"),
