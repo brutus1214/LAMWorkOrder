@@ -704,7 +704,7 @@ private fun assigneeOptions(state: QueueState): List<User> =
     val scope = rememberCoroutineScope()
     var vendorEmail by remember { mutableStateOf("") }
     var sendMenuOpen by remember { mutableStateOf(false) }
-    var preparingEmail by remember { mutableStateOf(false) }
+    var preparingSend by remember { mutableStateOf(false) }
     val contacts = remember(users, currentUser) {
         listOf(currentUser) + users.filter { it.id != currentUser.id }
     }
@@ -724,72 +724,82 @@ private fun assigneeOptions(state: QueueState): List<User> =
     )
     val validVendorEmail = vendorEmail.isBlank() ||
         Patterns.EMAIL_ADDRESS.matcher(vendorEmail.trim()).matches()
+    fun startPreparingSend(block: suspend () -> Unit) {
+        scope.launch {
+            preparingSend = true
+            try {
+                block()
+            } finally {
+                preparingSend = false
+            }
+        }
+    }
 
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Send work order", style = MaterialTheme.typography.titleMedium)
         Box(Modifier.fillMaxWidth()) {
             Button(
                 { sendMenuOpen = true },
-                enabled = !preparingEmail,
+                enabled = !preparingSend,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (preparingEmail) "Preparing email..." else "Send...") }
+            ) { Text(if (preparingSend) "Preparing..." else "Send...") }
             DropdownMenu(sendMenuOpen, { sendMenuOpen = false }) {
                 DropdownMenuItem(
                     text = { Text("Share work order") },
                     onClick = {
                         sendMenuOpen = false
-                        shareWorkOrder(context, subject, message)
+                        startPreparingSend {
+                            shareWorkOrder(context, model, order.attachments, subject, message)
+                        }
                     },
                 )
                 DropdownMenuItem(
                     text = { Text("Text requester") },
-                    enabled = textNumber(requester) != null,
+                    enabled = textNumber(requester) != null && !preparingSend,
                     onClick = {
                         sendMenuOpen = false
-                        textWorkOrder(context, textNumber(requester), message)
+                        startPreparingSend {
+                            textWorkOrder(context, model, order.attachments, textNumber(requester), message)
+                        }
                     },
                 )
                 DropdownMenuItem(
                     text = { Text("Email requester") },
-                    enabled = emailAddress(requester) != null && !preparingEmail,
+                    enabled = emailAddress(requester) != null && !preparingSend,
                     onClick = {
                         sendMenuOpen = false
-                        scope.launch {
-                            preparingEmail = true
+                        startPreparingSend {
                             emailWorkOrder(context, model, order.attachments, emailAddress(requester), subject, message)
-                            preparingEmail = false
                         }
                     },
                 )
                 DropdownMenuItem(
                     text = { Text("Text assignee") },
-                    enabled = textNumber(assignee) != null,
+                    enabled = textNumber(assignee) != null && !preparingSend,
                     onClick = {
                         sendMenuOpen = false
-                        textWorkOrder(context, textNumber(assignee), message)
+                        startPreparingSend {
+                            textWorkOrder(context, model, order.attachments, textNumber(assignee), message)
+                        }
                     },
                 )
                 DropdownMenuItem(
                     text = { Text("Email assignee") },
-                    enabled = emailAddress(assignee) != null && !preparingEmail,
+                    enabled = emailAddress(assignee) != null && !preparingSend,
                     onClick = {
                         sendMenuOpen = false
-                        scope.launch {
-                            preparingEmail = true
+                        startPreparingSend {
                             emailWorkOrder(context, model, order.attachments, emailAddress(assignee), subject, message)
-                            preparingEmail = false
                         }
                     },
                 )
                 DropdownMenuItem(
                     text = { Text("Email vendor") },
-                    enabled = vendorEmail.isNotBlank() && validVendorEmail && !preparingEmail,
+                    enabled = vendorEmail.isNotBlank() && validVendorEmail && !preparingSend,
                     onClick = {
                         sendMenuOpen = false
-                        scope.launch {
-                            preparingEmail = true
+                        startPreparingSend {
                             emailWorkOrder(context, model, order.attachments, vendorEmail.trim(), subject, message)
-                            preparingEmail = false
                         }
                     },
                 )
@@ -815,7 +825,7 @@ private fun assigneeOptions(state: QueueState): List<User> =
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var preparingEmail by remember { mutableStateOf(false) }
+    var preparingSend by remember { mutableStateOf(false) }
     val assignee = remember(contacts, request.assignedTo) {
         findWorkOrderContact(contacts, request.assignedTo)
     }
@@ -834,12 +844,23 @@ private fun assigneeOptions(state: QueueState): List<User> =
     )
     val attachmentText = when (request.order.attachments.size) {
         0 -> "No pictures or videos are attached."
-        1 -> "Email will include 1 attachment."
-        else -> "Email will include ${request.order.attachments.size} attachments."
+        1 -> "1 picture or video is attached."
+        else -> "${request.order.attachments.size} pictures or videos are attached."
+    }
+    fun startPreparingSend(block: suspend () -> Unit) {
+        scope.launch {
+            preparingSend = true
+            try {
+                block()
+                onDone()
+            } finally {
+                preparingSend = false
+            }
+        }
     }
 
     AlertDialog(
-        onDismissRequest = onDone,
+        onDismissRequest = { if (!preparingSend) onDone() },
         title = { Text("Send work order?") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -851,21 +872,21 @@ private fun assigneeOptions(state: QueueState): List<User> =
             }
         },
         dismissButton = {
-            TextButton(onDone) { Text("Skip") }
+            TextButton(onDone, enabled = !preparingSend) { Text("Skip") }
         },
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(
                     onClick = {
-                        textWorkOrder(context, phone, message)
-                        onDone()
+                        startPreparingSend {
+                            textWorkOrder(context, model, request.order.attachments, phone, message)
+                        }
                     },
-                    enabled = phone != null,
-                ) { Text("Text") }
+                    enabled = phone != null && !preparingSend,
+                ) { Text(if (preparingSend) "Preparing..." else "Text") }
                 TextButton(
                     onClick = {
-                        scope.launch {
-                            preparingEmail = true
+                        startPreparingSend {
                             emailWorkOrder(
                                 context,
                                 model,
@@ -874,32 +895,88 @@ private fun assigneeOptions(state: QueueState): List<User> =
                                 "Assigned: ${request.order.workOrderNumber}",
                                 message,
                             )
-                            preparingEmail = false
-                            onDone()
                         }
                     },
-                    enabled = email != null && !preparingEmail,
-                ) { Text(if (preparingEmail) "Preparing..." else "Email") }
+                    enabled = email != null && !preparingSend,
+                ) { Text(if (preparingSend) "Preparing..." else "Email") }
             }
         },
     )
 }
 
-private fun shareWorkOrder(context: Context, subject: String, message: String) {
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_SUBJECT, subject)
-        putExtra(Intent.EXTRA_TEXT, message)
+private suspend fun shareWorkOrder(
+    context: Context,
+    model: WorkOrderViewModel,
+    attachments: List<Attachment>,
+    subject: String,
+    message: String,
+) {
+    val attachmentUris = prepareAttachmentUrisForSend(context, model, attachments) ?: return
+    val intent = if (attachmentUris.isEmpty()) {
+        Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, message)
+        }
+    } else if (attachmentUris.size == 1) {
+        Intent(Intent.ACTION_SEND).apply {
+            type = attachmentIntentType(attachments)
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, message)
+            putExtra(Intent.EXTRA_STREAM, attachmentUris.first())
+            putExtra(Intent.EXTRA_MIME_TYPES, attachments.map { it.contentType }.distinct().toTypedArray())
+            addAttachmentClipData(context, attachmentUris)
+        }
+    } else {
+        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = attachmentIntentType(attachments)
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, message)
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(attachmentUris))
+            putExtra(Intent.EXTRA_MIME_TYPES, attachments.map { it.contentType }.distinct().toTypedArray())
+            addAttachmentClipData(context, attachmentUris)
+        }
     }
+    grantAttachmentPermissions(context, intent, attachmentUris)
     launchChooser(context, intent, "Share work order")
 }
 
-private fun textWorkOrder(context: Context, phoneNumber: String?, message: String) {
+private suspend fun textWorkOrder(
+    context: Context,
+    model: WorkOrderViewModel,
+    attachments: List<Attachment>,
+    phoneNumber: String?,
+    message: String,
+) {
     if (phoneNumber.isNullOrBlank()) return
-    val intent = Intent(Intent.ACTION_SENDTO).apply {
-        data = Uri.parse("smsto:${Uri.encode(phoneNumber)}")
-        putExtra("sms_body", message)
+    val attachmentUris = prepareAttachmentUrisForSend(context, model, attachments) ?: return
+    val intent = if (attachmentUris.isEmpty()) {
+        Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("smsto:${Uri.encode(phoneNumber)}")
+            putExtra("sms_body", message)
+        }
+    } else if (attachmentUris.size == 1) {
+        Intent(Intent.ACTION_SEND).apply {
+            type = attachmentIntentType(attachments)
+            putExtra("address", phoneNumber)
+            putExtra("sms_body", message)
+            putExtra(Intent.EXTRA_TEXT, message)
+            putExtra(Intent.EXTRA_STREAM, attachmentUris.first())
+            putExtra(Intent.EXTRA_MIME_TYPES, attachments.map { it.contentType }.distinct().toTypedArray())
+            addAttachmentClipData(context, attachmentUris)
+        }
+    } else {
+        Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = attachmentIntentType(attachments)
+            putExtra("address", phoneNumber)
+            putExtra("sms_body", message)
+            putExtra(Intent.EXTRA_TEXT, message)
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(attachmentUris))
+            putExtra(Intent.EXTRA_MIME_TYPES, attachments.map { it.contentType }.distinct().toTypedArray())
+            addAttachmentClipData(context, attachmentUris)
+        }
     }
+    grantAttachmentPermissions(context, intent, attachmentUris)
     launchChooser(context, intent, "Text work order")
 }
 
@@ -923,14 +1000,7 @@ private suspend fun emailWorkOrder(
     message: String,
 ) {
     if (emails.isEmpty()) return
-    val attachmentUris = prepareEmailAttachmentUris(context, model, attachments)
-    if (attachments.isNotEmpty() && attachmentUris.isEmpty()) {
-        Toast.makeText(context, "Unable to attach pictures or videos.", Toast.LENGTH_LONG).show()
-        return
-    }
-    if (attachmentUris.size < attachments.size) {
-        Toast.makeText(context, "Some attachments could not be added.", Toast.LENGTH_LONG).show()
-    }
+    val attachmentUris = prepareAttachmentUrisForSend(context, model, attachments) ?: return
     val intent = if (attachmentUris.isEmpty()) {
         Intent(Intent.ACTION_SENDTO).apply {
             data = Uri.parse("mailto:")
@@ -940,7 +1010,7 @@ private suspend fun emailWorkOrder(
         }
     } else if (attachmentUris.size == 1) {
         Intent(Intent.ACTION_SEND).apply {
-            type = emailAttachmentType(attachments)
+            type = attachmentIntentType(attachments)
             putExtra(Intent.EXTRA_EMAIL, emails.toTypedArray())
             putExtra(Intent.EXTRA_SUBJECT, subject)
             putExtra(Intent.EXTRA_TEXT, message)
@@ -950,7 +1020,7 @@ private suspend fun emailWorkOrder(
         }
     } else {
         Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-            type = emailAttachmentType(attachments)
+            type = attachmentIntentType(attachments)
             putExtra(Intent.EXTRA_EMAIL, emails.toTypedArray())
             putExtra(Intent.EXTRA_SUBJECT, subject)
             putExtra(Intent.EXTRA_TEXT, message)
@@ -963,7 +1033,7 @@ private suspend fun emailWorkOrder(
     launchChooser(context, intent, "Email work order")
 }
 
-private fun emailAttachmentType(attachments: List<Attachment>): String {
+private fun attachmentIntentType(attachments: List<Attachment>): String {
     val contentTypes = attachments.map { it.contentType }
     return when {
         contentTypes.isEmpty() -> "message/rfc822"
@@ -994,7 +1064,23 @@ private fun grantAttachmentPermissions(context: Context, intent: Intent, uris: L
     }
 }
 
-private suspend fun prepareEmailAttachmentUris(
+private suspend fun prepareAttachmentUrisForSend(
+    context: Context,
+    model: WorkOrderViewModel,
+    attachments: List<Attachment>,
+): List<Uri>? {
+    val attachmentUris = prepareAttachmentUris(context, model, attachments)
+    if (attachments.isNotEmpty() && attachmentUris.isEmpty()) {
+        Toast.makeText(context, "Unable to attach pictures or videos.", Toast.LENGTH_LONG).show()
+        return null
+    }
+    if (attachmentUris.size < attachments.size) {
+        Toast.makeText(context, "Some attachments could not be added.", Toast.LENGTH_LONG).show()
+    }
+    return attachmentUris
+}
+
+private suspend fun prepareAttachmentUris(
     context: Context,
     model: WorkOrderViewModel,
     attachments: List<Attachment>,

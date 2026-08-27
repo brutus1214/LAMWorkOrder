@@ -16,6 +16,8 @@ let user = null;
 let orders = [];
 let assignees = [];
 let filter = "New";
+let attachmentObjectUrls = [];
+let attachmentPreviewGeneration = 0;
 
 const label = (value) => String(value || "").replace(/([a-z])([A-Z])/g, "$1 $2");
 const escapeHtml = (value = "") =>
@@ -226,17 +228,87 @@ function detailField(labelText, value) {
   return `<div class="detail-field"><span>${escapeHtml(labelText)}</span><strong>${escapeHtml(value || "Unassigned")}</strong></div>`;
 }
 
+function revokeAttachmentObjectUrls() {
+  attachmentPreviewGeneration += 1;
+  attachmentObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+  attachmentObjectUrls = [];
+}
+
 function renderAttachments(attachments = []) {
   if (!attachments.length) return '<p class="detail-muted">No photos or videos attached.</p>';
   return `<div class="attachment-list">${attachments
     .map(
-      (attachment) =>
-        `<a href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener">${escapeHtml(attachment.originalName)}<small>${escapeHtml(label(attachment.contentType))}</small></a>`,
+      (attachment) => `
+        <article class="attachment-card">
+          <div
+            class="attachment-preview"
+            data-attachment-url="${escapeHtml(attachment.url)}"
+            data-attachment-name="${escapeHtml(attachment.originalName)}"
+            data-attachment-type="${escapeHtml(attachment.contentType)}"
+          >Loading preview...</div>
+          <div class="attachment-meta">
+            <strong>${escapeHtml(attachment.originalName)}</strong>
+            <small>${escapeHtml(label(attachment.contentType))}</small>
+          </div>
+        </article>`,
     )
     .join("")}</div>`;
 }
 
+async function hydrateAttachmentPreviews(generation) {
+  const previews = document.querySelectorAll("#work-order-detail .attachment-preview");
+  await Promise.all(
+    [...previews].map(async (preview) => {
+      const sourceUrl = preview.dataset.attachmentUrl;
+      const contentType = preview.dataset.attachmentType || "";
+      const originalName = preview.dataset.attachmentName || "Attachment";
+      try {
+        const headers = new Headers();
+        if (token) headers.set("Authorization", `Bearer ${token}`);
+        const response = await fetch(sourceUrl, { headers });
+        if (!response.ok) throw new Error("Unable to load preview.");
+        const blob = await response.blob();
+        if (generation !== attachmentPreviewGeneration) return;
+        const objectUrl = URL.createObjectURL(blob);
+        attachmentObjectUrls.push(objectUrl);
+        preview.textContent = "";
+        if (contentType.startsWith("image/")) {
+          const link = document.createElement("a");
+          link.href = objectUrl;
+          link.target = "_blank";
+          link.rel = "noopener";
+          const image = document.createElement("img");
+          image.src = objectUrl;
+          image.alt = originalName;
+          link.append(image);
+          preview.append(link);
+        } else if (contentType.startsWith("video/")) {
+          const video = document.createElement("video");
+          video.src = objectUrl;
+          video.controls = true;
+          video.preload = "metadata";
+          preview.append(video);
+        } else {
+          const link = document.createElement("a");
+          link.href = objectUrl;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.textContent = "Open attachment";
+          preview.append(link);
+        }
+      } catch {
+        if (generation === attachmentPreviewGeneration) {
+          preview.textContent = "Preview unavailable. Sign in again or refresh.";
+          preview.classList.add("attachment-preview-error");
+        }
+      }
+    }),
+  );
+}
+
 function renderWorkOrderDetail(order) {
+  revokeAttachmentObjectUrls();
+  const generation = attachmentPreviewGeneration;
   $("work-order-detail").innerHTML = `
     <div class="detail-title">
       <div>
@@ -266,6 +338,7 @@ function renderWorkOrderDetail(order) {
       <h3>Photos and videos</h3>
       ${renderAttachments(order.attachments)}
     </section>`;
+  hydrateAttachmentPreviews(generation);
 }
 
 async function openWorkOrderDetail(orderId) {
@@ -288,6 +361,7 @@ async function openWorkOrderDetail(orderId) {
 function closeWorkOrderDetail() {
   const dialog = $("work-order-dialog");
   if (!dialog) return;
+  revokeAttachmentObjectUrls();
   if (dialog.open) dialog.close();
   dialog.hidden = true;
 }

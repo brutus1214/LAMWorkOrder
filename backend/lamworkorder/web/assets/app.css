@@ -435,27 +435,65 @@ dialog::backdrop {
 
 .attachment-list {
   display: grid;
-  gap: .5rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: .75rem;
 }
 
-.attachment-list a {
-  display: block;
+.attachment-card {
   border: 1px solid #dbe3ea;
   border-radius: 8px;
-  padding: .75rem;
-  color: #0b625b;
-  text-decoration: none;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  background: #f8fbfd;
 }
 
-.attachment-list a:hover {
+.attachment-preview {
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  background: #10253f0d;
+  color: #607085;
+  text-align: center;
+}
+
+.attachment-preview img,
+.attachment-preview video {
+  display: block;
+  width: 100%;
+  max-height: 340px;
+  object-fit: contain;
+  background: #0f1f33;
+}
+
+.attachment-preview a {
+  display: block;
+  width: 100%;
+  color: #0b625b;
+  text-decoration: none;
+}
+
+.attachment-preview a:hover {
   background: #f1f7f6;
 }
 
-.attachment-list small {
+.attachment-meta {
+  padding: .75rem;
+  overflow-wrap: anywhere;
+}
+
+.attachment-meta strong,
+.attachment-meta small {
+  display: block;
+}
+
+.attachment-meta small {
   display: block;
   color: #738194;
   margin-top: .1rem;
+}
+
+.attachment-preview-error {
+  color: #a1261c;
+  padding: .75rem;
 }
 
 @media (max-width: 900px) {

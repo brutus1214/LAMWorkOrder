@@ -54,8 +54,8 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert 'id="mobile-create-toggle"' in dashboard.text
     assert 'data-filter="Me"' in dashboard.text
     assert 'id="work-order-dialog"' in dashboard.text
-    assert "app.css?v=20260826-permissions" in dashboard.text
-    assert "app.js?v=20260826-permissions" in dashboard.text
+    assert "app.css?v=20260826-media" in dashboard.text
+    assert "app.js?v=20260826-media" in dashboard.text
     assert "@media (max-width: 700px)" in styles.text
     assert "table,\n  tbody,\n  tr,\n  td" in styles.text
     assert "flex-wrap: wrap" in styles.text
@@ -63,6 +63,10 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert "setMobileIntakeOpen" in script.text
     assert "matchesCurrentUser" in script.text
     assert "openWorkOrderDetail" in script.text
+    assert "hydrateAttachmentPreviews" in script.text
+    assert "attachment-preview" in script.text
+    assert "URL.createObjectURL" in script.text
+    assert "attachment-card" in styles.text
     assert "data-order-id" in script.text
     assert '"Admin", "Manager", "Employee", "Technician"' in script.text
 
