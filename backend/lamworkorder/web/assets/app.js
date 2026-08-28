@@ -8,7 +8,10 @@ const statusRank = {
   Completed: 4,
   Cancelled: 5,
 };
+const statuses = ["New", "Scheduled", "InProgress", "Blocked", "Completed", "Cancelled"];
+const priorities = ["Low", "Normal", "High", "Emergency"];
 const assignableRoleOrder = ["Admin", "Manager", "Employee", "Security", "Technician"];
+const employeeScopedRoles = ["Employee", "Security"];
 const allMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
 
 let token = sessionStorage.getItem("lamworkorder.token");
@@ -48,19 +51,47 @@ const normalizedName = (value = "") =>
     .replace(/\s+/g, " ");
 const withoutStoreLabel = (value) => value.replace(/\s+-\s+(la mart \d+|all stores)$/, "");
 
-function matchesCurrentUser(order) {
-  if (!user) return false;
-  if (order.createdById && order.createdById === user.id) return true;
+function currentUserAssigneeNames() {
+  if (!user) return new Set();
   const displayName = normalizedName(user.displayName);
-  const names = new Set([
+  return new Set([
     displayName,
     normalizedName(user.username),
     normalizedName(assigneeOptionLabel(user)),
   ]);
-  return [order.requestedBy, order.assignedTo].some((value) => {
-    const field = normalizedName(value);
-    return names.has(field) || withoutStoreLabel(field) === displayName;
-  });
+}
+
+function workOrderAssignedToCurrentUser(order) {
+  if (!user) return false;
+  const field = normalizedName(order.assignedTo);
+  if (!field) return false;
+  return (
+    currentUserAssigneeNames().has(field) ||
+    withoutStoreLabel(field) === normalizedName(user.displayName)
+  );
+}
+
+function workOrderCreatedByCurrentUser(order) {
+  if (!user) return false;
+  return (
+    order.createdById === user.id ||
+    (!order.createdById && normalizedName(order.requestedBy) === normalizedName(user.displayName))
+  );
+}
+
+function canUpdateWorkOrder(order) {
+  if (!user) return false;
+  if (user.role === "Admin") return true;
+  if (user.role === "Manager") return user.storeNumber === order.storeNumber;
+  if (employeeScopedRoles.includes(user.role)) {
+    return workOrderCreatedByCurrentUser(order) || workOrderAssignedToCurrentUser(order);
+  }
+  if (user.role === "Technician") return workOrderAssignedToCurrentUser(order);
+  return false;
+}
+
+function matchesCurrentUser(order) {
+  return workOrderCreatedByCurrentUser(order) || workOrderAssignedToCurrentUser(order);
 }
 
 async function api(path, options = {}) {
@@ -198,24 +229,41 @@ async function load() {
   }
 }
 
+function optionTag(value, text, selected = "") {
+  const selectedAttribute = normalizedName(value) === normalizedName(selected) ? " selected" : "";
+  return `<option value="${escapeHtml(value)}"${selectedAttribute}>${escapeHtml(text)}</option>`;
+}
+
+function optionsHtml(options, selected, displayValue = label) {
+  return options.map((option) => optionTag(option, displayValue(option), selected)).join("");
+}
+
+function assigneeOptionsHtml(selected = "") {
+  const knownValues = new Set([""]);
+  const groups = assignableRoleOrder
+    .map((role) => {
+      const members = assignees.filter((account) => account.role === role);
+      if (!members.length) return "";
+      return `<optgroup label="${role}">${members
+        .map((account) => {
+          const optionLabel = assigneeOptionLabel(account);
+          knownValues.add(normalizedName(optionLabel));
+          return optionTag(optionLabel, optionLabel, selected);
+        })
+        .join("")}</optgroup>`;
+    })
+    .join("");
+  const currentOption =
+    selected && !knownValues.has(normalizedName(selected))
+      ? optionTag(selected, selected, selected)
+      : "";
+  return optionTag("", "Unassigned", selected) + currentOption + groups;
+}
+
 function renderAssignees() {
   const select = $("assigned-to");
   if (!select) return;
-  select.innerHTML =
-    '<option value="">Unassigned</option>' +
-    assignableRoleOrder
-      .map((role) => {
-        const members = assignees.filter((account) => account.role === role);
-        return members.length
-          ? `<optgroup label="${role}">${members
-              .map((account) => {
-                const optionLabel = assigneeOptionLabel(account);
-                return `<option value="${escapeHtml(optionLabel)}">${escapeHtml(optionLabel)}</option>`;
-              })
-              .join("")}</optgroup>`
-          : "";
-      })
-      .join("");
+  select.innerHTML = assigneeOptionsHtml();
 }
 
 async function loadAssignees() {
@@ -310,6 +358,7 @@ async function hydrateAttachmentPreviews(generation) {
 function renderWorkOrderDetail(order) {
   revokeAttachmentObjectUrls();
   const generation = attachmentPreviewGeneration;
+  const canEdit = canUpdateWorkOrder(order);
   $("work-order-detail").innerHTML = `
     <div class="detail-title">
       <div>
@@ -331,8 +380,26 @@ function renderWorkOrderDetail(order) {
       <p>${escapeHtml(order.description)}</p>
     </section>
     ${
-      order.statusNote
+      !canEdit && order.statusNote
         ? `<section class="detail-section"><h3>Status note</h3><p>${escapeHtml(order.statusNote)}</p></section>`
+        : ""
+    }
+    ${
+      canEdit
+        ? `<form class="detail-section detail-edit-form" data-work-order-update data-order-id="${escapeHtml(order.id)}">
+            <h3>Update work order</h3>
+            <div class="detail-form-grid">
+              <label>Title<input name="title" value="${escapeHtml(order.title)}" required maxlength="120"></label>
+              <label>Priority<select name="priority">${optionsHtml(priorities, order.priority)}</select></label>
+              <label class="span-2">Description<textarea name="description" required maxlength="2000">${escapeHtml(order.description)}</textarea></label>
+              <label>Location<input name="location" value="${escapeHtml(order.location)}" required maxlength="160"></label>
+              <label>Assigned to<select name="assignedTo">${assigneeOptionsHtml(order.assignedTo || "")}</select></label>
+              <label>Status<select name="status">${optionsHtml(statuses, order.status)}</select></label>
+              <label class="span-2">Status note<textarea name="statusNote" maxlength="1000">${escapeHtml(order.statusNote || "")}</textarea></label>
+              <label class="span-2">Add pictures or videos<input name="attachments" type="file" accept="image/*,video/*" multiple></label>
+            </div>
+            <div class="detail-save-row"><button type="submit">Save work order</button></div>
+          </form>`
         : ""
     }
     <section class="detail-section">
@@ -383,6 +450,54 @@ $("orders").addEventListener("keydown", (event) => {
 $("close-work-order").onclick = closeWorkOrderDetail;
 $("work-order-dialog").addEventListener("click", (event) => {
   if (event.target === $("work-order-dialog")) closeWorkOrderDetail();
+});
+
+$("work-order-detail").addEventListener("submit", async (event) => {
+  const form = event.target.closest("[data-work-order-update]");
+  if (!form) return;
+  event.preventDefault();
+  const button = form.querySelector("button[type=submit]");
+  const orderId = form.dataset.orderId;
+  const existing = orders.find((order) => order.id === orderId);
+  button.disabled = true;
+  $("work-order-error").textContent = "";
+  try {
+    const data = new FormData(form);
+    const files = data.getAll("attachments").filter((file) => file.size);
+    const updated = await api(`/api/work-orders/${encodeURIComponent(orderId)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        storeNumber: existing?.storeNumber || user.storeNumber,
+        title: String(data.get("title") || "").trim(),
+        description: String(data.get("description") || "").trim(),
+        requestedBy: existing?.requestedBy || user.displayName,
+        location: String(data.get("location") || "").trim(),
+        priority: data.get("priority"),
+        assignedTo: data.get("assignedTo") || null,
+        dueAt: existing?.dueAt || null,
+        status: data.get("status"),
+        statusNote: String(data.get("statusNote") || "").trim() || null,
+      }),
+    });
+    if (files.length) {
+      const media = new FormData();
+      files.forEach((file) => media.append("files", file));
+      await api(`/api/work-orders/${encodeURIComponent(updated.id)}/attachments`, {
+        method: "POST",
+        body: media,
+      });
+    }
+    const refreshed = await api(`/api/work-orders/${encodeURIComponent(updated.id)}`);
+    orders = orders.map((order) => (order.id === refreshed.id ? refreshed : order));
+    render();
+    renderWorkOrderDetail(refreshed);
+    $("message").textContent = `${refreshed.workOrderNumber} saved.`;
+  } catch (error) {
+    $("work-order-error").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
 });
 $("mobile-create-toggle").onclick = () => setMobileIntakeOpen(true);
 $("close-create").onclick = () => setMobileIntakeOpen(false);
