@@ -92,6 +92,13 @@ header {
   gap: 1.25rem;
 }
 
+.brand-logo-line {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  min-width: 0;
+}
+
 .brand img {
   width: clamp(140px, 18vw, 240px);
   height: 70px;
@@ -99,6 +106,17 @@ header {
   background: #fff;
   border-radius: .7rem;
   padding: .5rem;
+}
+
+.build-tag {
+  flex: 0 0 auto;
+  border: 1px solid #62d7c8;
+  border-radius: 8px;
+  padding: .2rem .4rem;
+  color: #d9fff9;
+  font-size: .68rem;
+  font-weight: 800;
+  line-height: 1;
 }
 
 h1,
@@ -551,14 +569,20 @@ dialog::backdrop {
   }
 
   .brand img {
-    width: min(100%, 360px);
-    max-width: calc(100vw - 92px);
+    width: min(46vw, 180px);
+    max-width: none;
     height: 54px;
     padding: 0;
     background: transparent;
     border-radius: 0;
     object-fit: contain;
     object-position: left center;
+  }
+
+  .build-tag {
+    border-color: #0d8278;
+    color: #0b625b;
+    font-size: .62rem;
   }
 
   .brand .eyebrow {
