@@ -6,6 +6,7 @@ import kotlinx.serialization.Serializable
 data class WorkOrder(
     val id: String,
     val workOrderNumber: String,
+    val createdById: String? = null,
     val storeNumber: Int,
     val title: String,
     val description: String,

@@ -42,6 +42,7 @@ ALLOWED_TYPES = {
 }
 ASSIGNABLE_ROLES = ("Employee", "Manager", "Security", "Technician")
 SPECIAL_ASSIGNEE_USERNAMES = ("jc",)
+EMPLOYEE_SCOPED_ROLES = {"Employee", "Security"}
 
 
 def repository(session: Session = Depends(get_session)) -> WorkOrderRepository:
@@ -63,6 +64,78 @@ def require_work_order_store(user: User, item, action: str = "modify") -> None:
             status_code=403,
             detail=f"Only an Administrator can {action} work orders for another store",
         )
+
+
+def normalized_identity(value: str | None) -> str:
+    return " ".join((value or "").strip().casefold().split())
+
+
+def without_store_label(value: str) -> str:
+    value = normalized_identity(value)
+    marker = " - la mart "
+    if marker in value:
+        name, store = value.rsplit(marker, 1)
+        if store.isdigit():
+            return name
+    return value.removesuffix(" - all stores")
+
+
+def user_assignee_labels(user: User) -> set[str]:
+    store_label = "All Stores" if user.store_number == 99 else f"LA Mart {user.store_number}"
+    return {
+        normalized_identity(user.display_name),
+        normalized_identity(user.username),
+        normalized_identity(f"{user.display_name} - {store_label}"),
+    }
+
+
+def work_order_assigned_to_user(user: User, item) -> bool:
+    assigned_to = normalized_identity(item.assigned_to)
+    if not assigned_to:
+        return False
+    return assigned_to in user_assignee_labels(user) or without_store_label(assigned_to) == normalized_identity(
+        user.display_name
+    )
+
+
+def work_order_created_by_user(user: User, item) -> bool:
+    if item.created_by_id == user.id:
+        return True
+    return item.created_by_id is None and normalized_identity(item.requested_by) == normalized_identity(
+        user.display_name
+    )
+
+
+def can_update_work_order(user: User, item) -> bool:
+    if user.role == "Admin":
+        return True
+    if user.role == "Manager":
+        return user.store_number == item.store_number
+    if user.role in EMPLOYEE_SCOPED_ROLES:
+        return work_order_created_by_user(user, item) or work_order_assigned_to_user(user, item)
+    if user.role == "Technician":
+        return work_order_assigned_to_user(user, item)
+    return False
+
+
+def require_work_order_update(user: User, item, action: str = "update") -> None:
+    if can_update_work_order(user, item):
+        return
+    if user.role == "Manager":
+        detail = f"Managers can only {action} work orders for their store"
+    elif user.role in EMPLOYEE_SCOPED_ROLES:
+        detail = f"Employees and Security can only {action} work orders they created or are assigned to"
+    elif user.role == "Technician":
+        detail = f"Technicians can only {action} work orders assigned to them"
+    else:
+        detail = f"You do not have permission to {action} this work order"
+    raise HTTPException(status_code=403, detail=detail)
+
+
+def require_work_order_attachment(user: User, item) -> None:
+    if can_update_work_order(user, item) or work_order_created_by_user(user, item):
+        return
+    require_work_order_update(user, item, "add attachments to")
 
 
 @router.get("/health", response_model=Health, tags=["system"])
@@ -296,10 +369,10 @@ def update_work_order(
     work_order_id: UUID,
     request: WorkOrderUpdate,
     repo: WorkOrderRepository = Depends(repository),
-    user: User = Depends(require_roles("Admin", "Manager")),
+    user: User = Depends(current_user),
 ):
     item = find_order(work_order_id, repo)
-    require_work_order_store(user, item)
+    require_work_order_update(user, item)
     return repo.update(item, request)
 
 
@@ -310,10 +383,10 @@ def update_status(
     work_order_id: UUID,
     request: StatusUpdate,
     repo: WorkOrderRepository = Depends(repository),
-    user: User = Depends(require_roles("Admin", "Manager", "Technician")),
+    user: User = Depends(current_user),
 ):
     item = find_order(work_order_id, repo)
-    require_work_order_store(user, item)
+    require_work_order_update(user, item)
     return repo.update_status(item, request)
 
 
@@ -330,7 +403,7 @@ async def upload_attachments(
     user: User = Depends(current_user),
 ):
     item = find_order(work_order_id, repo)
-    require_work_order_store(user, item)
+    require_work_order_attachment(user, item)
     if not files:
         raise HTTPException(status_code=422, detail="At least one file is required")
     UPLOADS.mkdir(parents=True, exist_ok=True)

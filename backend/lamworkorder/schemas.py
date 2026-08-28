@@ -63,6 +63,7 @@ class StatusUpdate(ApiModel):
 class WorkOrderRead(WorkOrderCreate):
     id: UUID
     work_order_number: str
+    created_by_id: UUID | None = None
     status: Status
     created_at: datetime
     updated_at: datetime

@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
 }
 
 private val assignableRoles = listOf("Admin", "Manager", "Employee", "Security", "Technician")
+private val employeeScopedRoles = setOf("Employee", "Security")
 
 private fun assigneeRoleRank(role: String): Int =
     assignableRoles.indexOf(role).let { if (it >= 0) it else assignableRoles.size }
@@ -76,6 +77,44 @@ private fun userStoreLabel(user: User): String =
 
 private fun assigneeLabel(user: User): String =
     "${user.displayName} - ${userStoreLabel(user)}"
+
+private fun normalizedIdentity(value: String?): String =
+    value.orEmpty().trim().lowercase().replace(Regex("\\s+"), " ")
+
+private fun withoutStoreLabel(value: String): String {
+    val normalized = normalizedIdentity(value)
+    val marker = " - la mart "
+    val markerIndex = normalized.lastIndexOf(marker)
+    if (markerIndex >= 0) {
+        val store = normalized.substring(markerIndex + marker.length)
+        if (store.all { it.isDigit() }) return normalized.substring(0, markerIndex)
+    }
+    return normalized.removeSuffix(" - all stores")
+}
+
+private fun workOrderAssignedToUser(order: WorkOrder, user: User): Boolean {
+    val assignedTo = normalizedIdentity(order.assignedTo)
+    if (assignedTo.isBlank()) return false
+    val labels = setOf(
+        normalizedIdentity(user.displayName),
+        normalizedIdentity(user.username),
+        normalizedIdentity(assigneeLabel(user)),
+    )
+    return assignedTo in labels || withoutStoreLabel(assignedTo) == normalizedIdentity(user.displayName)
+}
+
+private fun workOrderCreatedByUser(order: WorkOrder, user: User): Boolean =
+    order.createdById == user.id ||
+        (order.createdById == null && normalizedIdentity(order.requestedBy) == normalizedIdentity(user.displayName))
+
+private fun canUpdateWorkOrder(order: WorkOrder, user: User): Boolean =
+    when (user.role) {
+        "Admin" -> true
+        "Manager" -> user.storeNumber == order.storeNumber
+        in employeeScopedRoles -> workOrderCreatedByUser(order, user) || workOrderAssignedToUser(order, user)
+        "Technician" -> workOrderAssignedToUser(order, user)
+        else -> false
+    }
 
 private data class AssignmentSendRequest(
     val order: WorkOrder,
@@ -464,7 +503,7 @@ private fun assigneeOptions(state: QueueState): List<User> =
 
 @Composable private fun Detail(model:WorkOrderViewModel,o:WorkOrder,state:QueueState,back:()->Unit){
     val user = state.user ?: return
-    val full=user.role in listOf("Admin","Manager"); val statusEdit=full||user.role=="Technician"
+    val full=canUpdateWorkOrder(o,user); val statusEdit=full
     var title by remember{mutableStateOf(o.title)};var description by remember{mutableStateOf(o.description)};var requester by remember{mutableStateOf(o.requestedBy)};var location by remember{mutableStateOf(o.location)};var priority by remember{mutableStateOf(o.priority)};var assigned by remember{mutableStateOf(o.assignedTo.orEmpty())};var status by remember{mutableStateOf(o.status)};var note by remember{mutableStateOf(o.statusNote.orEmpty())}
     val context=LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }

@@ -50,6 +50,7 @@ const withoutStoreLabel = (value) => value.replace(/\s+-\s+(la mart \d+|all stor
 
 function matchesCurrentUser(order) {
   if (!user) return false;
+  if (order.createdById && order.createdById === user.id) return true;
   const displayName = normalizedName(user.displayName);
   const names = new Set([
     displayName,

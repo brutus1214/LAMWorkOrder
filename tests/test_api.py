@@ -54,8 +54,8 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert 'id="mobile-create-toggle"' in dashboard.text
     assert 'data-filter="Me"' in dashboard.text
     assert 'id="work-order-dialog"' in dashboard.text
-    assert "app.css?v=20260827-security" in dashboard.text
-    assert "app.js?v=20260827-security" in dashboard.text
+    assert "app.css?v=20260828-role-scope" in dashboard.text
+    assert "app.js?v=20260828-role-scope" in dashboard.text
     assert "@media (max-width: 700px)" in styles.text
     assert "table,\n  tbody,\n  tr,\n  td" in styles.text
     assert "flex-wrap: wrap" in styles.text
@@ -68,6 +68,7 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert "URL.createObjectURL" in script.text
     assert "attachment-card" in styles.text
     assert "data-order-id" in script.text
+    assert "createdById" in script.text
     assert '"Admin", "Manager", "Employee", "Security", "Technician"' in script.text
 
 
@@ -89,6 +90,7 @@ def test_login_profile_and_permissions(client):
         "/api/work-orders", json={**PAYLOAD, "storeNumber": 1}, headers=requester
     ).json()
     assert created["requestedBy"] == "Requester"
+    assert created["createdById"] == client.get("/api/profile", headers=requester).json()["id"]
     denied = client.put(
         f"/api/work-orders/{created['id']}",
         json={**PAYLOAD, "status": "Scheduled", "statusNote": "planned"},
@@ -175,11 +177,13 @@ def test_create_list_filter_and_update(client):
     assert updated.json()["statusNote"] == "Technician dispatched"
 
 
-def test_non_admins_can_only_write_work_orders_for_their_store(client, tmp_path, monkeypatch):
+def test_role_scoped_work_order_updates(client, tmp_path, monkeypatch):
     import lamworkorder.api as api
 
     monkeypatch.setattr(api, "UPLOADS", tmp_path)
     manager = auth_headers(client, "manager")
+    employee = auth_headers(client, "employee")
+    security = auth_headers(client, "security")
     technician = auth_headers(client, "technician")
     requester = auth_headers(client, "requester")
 
@@ -191,9 +195,30 @@ def test_non_admins_can_only_write_work_orders_for_their_store(client, tmp_path,
         "/api/work-orders",
         json={**PAYLOAD, "storeNumber": 3, "title": "Manager store order"},
     ).json()
-    technician_store = client.post(
+    employee_created = client.post(
         "/api/work-orders",
-        json={**PAYLOAD, "storeNumber": 1, "title": "Technician store order"},
+        json={**PAYLOAD, "storeNumber": 1, "title": "Employee created order"},
+        headers=employee,
+    ).json()
+    employee_assigned = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 1, "assignedTo": "Employee - LA Mart 1"},
+    ).json()
+    unrelated_store_one = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 1, "title": "Unrelated store one order"},
+    ).json()
+    security_assigned = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 1, "assignedTo": "Security - LA Mart 1"},
+    ).json()
+    technician_assigned = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 1, "assignedTo": "Technician - LA Mart 1"},
+    ).json()
+    technician_unassigned = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 1, "title": "Technician unassigned order"},
     ).json()
 
     denied_create = client.post("/api/work-orders", json=PAYLOAD, headers=requester)
@@ -213,6 +238,40 @@ def test_non_admins_can_only_write_work_orders_for_their_store(client, tmp_path,
     )
     assert allowed_edit.status_code == 200
 
+    employee_edit = client.put(
+        f"/api/work-orders/{employee_created['id']}",
+        json={
+            **PAYLOAD,
+            "storeNumber": 1,
+            "title": "Employee edited own order",
+            "status": "Scheduled",
+            "statusNote": "employee planned",
+        },
+        headers=employee,
+    )
+    assert employee_edit.status_code == 200
+
+    employee_status = client.patch(
+        f"/api/work-orders/{employee_assigned['id']}/status",
+        json={"status": "InProgress", "note": "employee assigned"},
+        headers=employee,
+    )
+    assert employee_status.status_code == 200
+
+    denied_employee_edit = client.put(
+        f"/api/work-orders/{unrelated_store_one['id']}",
+        json={**PAYLOAD, "storeNumber": 1, "status": "Scheduled", "statusNote": "no"},
+        headers=employee,
+    )
+    assert denied_employee_edit.status_code == 403
+
+    security_status = client.patch(
+        f"/api/work-orders/{security_assigned['id']}/status",
+        json={"status": "InProgress", "note": "security assigned"},
+        headers=security,
+    )
+    assert security_status.status_code == 200
+
     denied_status = client.patch(
         f"/api/work-orders/{other_store['id']}/status",
         json={"status": "InProgress", "note": "wrong store"},
@@ -221,11 +280,32 @@ def test_non_admins_can_only_write_work_orders_for_their_store(client, tmp_path,
     assert denied_status.status_code == 403
 
     allowed_status = client.patch(
-        f"/api/work-orders/{technician_store['id']}/status",
-        json={"status": "InProgress", "note": "same store"},
+        f"/api/work-orders/{technician_assigned['id']}/status",
+        json={"status": "InProgress", "note": "assigned technician"},
         headers=technician,
     )
     assert allowed_status.status_code == 200
+
+    technician_edit = client.put(
+        f"/api/work-orders/{technician_assigned['id']}",
+        json={
+            **PAYLOAD,
+            "storeNumber": 1,
+            "assignedTo": "Technician - LA Mart 1",
+            "title": "Technician edited assigned order",
+            "status": "Blocked",
+            "statusNote": "waiting on parts",
+        },
+        headers=technician,
+    )
+    assert technician_edit.status_code == 200
+
+    denied_unassigned_status = client.patch(
+        f"/api/work-orders/{technician_unassigned['id']}/status",
+        json={"status": "InProgress", "note": "not assigned"},
+        headers=technician,
+    )
+    assert denied_unassigned_status.status_code == 403
 
     denied_upload = client.post(
         f"/api/work-orders/{other_store['id']}/attachments",
@@ -233,6 +313,13 @@ def test_non_admins_can_only_write_work_orders_for_their_store(client, tmp_path,
         headers=requester,
     )
     assert denied_upload.status_code == 403
+
+    allowed_upload = client.post(
+        f"/api/work-orders/{technician_assigned['id']}/attachments",
+        files=[("files", ("proof.jpg", b"jpeg", "image/jpeg"))],
+        headers=technician,
+    )
+    assert allowed_upload.status_code == 201
 
     uploaded = client.post(
         f"/api/work-orders/{other_store['id']}/attachments",

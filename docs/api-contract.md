@@ -10,9 +10,9 @@ Interactive OpenAPI is at `/docs`.
 - `GET /api/work-order-notification-recipients?storeNumber=`
 - `POST /api/work-orders`
 - `PATCH /api/work-orders/{id}/status`
-- `PUT /api/work-orders/{id}` (Admin or Manager; edits every detail)
+- `PUT /api/work-orders/{id}` (Admin all stores; Manager same store; Employee/Security when creator or assignee; Technician when assignee)
 - `DELETE /api/work-orders/{id}` (`jc` only)
-- `POST /api/work-orders/{id}/attachments` (Technician, Manager, or Admin; multiple `files` parts)
+- `POST /api/work-orders/{id}/attachments` (same role scope as work-order updates; requesters can attach to their own submissions)
 - `GET /api/attachments/{id}/content`
 - `DELETE /api/attachments/{id}` (Admin or Manager)
 
