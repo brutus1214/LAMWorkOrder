@@ -9,9 +9,10 @@ The Android client and API include bearer-token login, editable user profiles, s
 | `backend/` | FastAPI backend, SQLite database, and web dashboard |
 | `desktop/` | PySide6 Windows desktop application |
 | `android/` | Native Kotlin Android application using Jetpack Compose |
+| `ios/` | Native SwiftUI iPhone application |
 | `tests/` | Python backend tests |
 
-The web dashboard, Windows app, and Android app all connect to the same Python backend.
+The web dashboard, Windows app, Android app, and iPhone app all connect to the same Python backend.
 
 ## 1. Requirements
 
@@ -189,6 +190,7 @@ The reserved backend ports are:
 | Web browser on the Windows computer | `http://localhost:5081` |
 | Windows desktop app | `http://50.190.210.154:5081` |
 | Android Version 1 client | `http://50.190.210.154:5081/` |
+| iPhone client | `http://50.190.210.154:5081/` |
 | Local development override | `http://YOUR-PC-IP:5081/` |
 
 ## 9. Run tests

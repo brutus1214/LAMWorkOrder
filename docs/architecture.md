@@ -1,9 +1,10 @@
 # Architecture
 
 ```text
-Android (Kotlin/Compose) ─┐
-Web (HTML/CSS/JS) ───────┼─> FastAPI -> repository -> SQLite
-Windows (PySide6) ───────┘
+Android (Kotlin/Compose) -> FastAPI -> repository -> SQLite
+iPhone (SwiftUI) ------^
+Web (HTML/CSS/JS) -----^
+Windows (PySide6) -----^
 ```
 
 FastAPI owns validation, workflow rules, OpenAPI, and persistence. SQLAlchemy keeps storage

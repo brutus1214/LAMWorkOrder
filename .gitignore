@@ -1,6 +1,8 @@
 .venv/
 .venv*/
 uploads/
+ios/**/*.xcuserdata/
+ios/**/*.xcuserstate
 __pycache__/
 *.py[cod]
 .pytest_cache/
