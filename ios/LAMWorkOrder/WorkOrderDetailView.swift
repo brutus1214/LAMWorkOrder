@@ -1,6 +1,4 @@
-import PhotosUI
 import SwiftUI
-import UniformTypeIdentifiers
 import UIKit
 
 struct WorkOrderDetailView: View {
@@ -16,8 +14,9 @@ struct WorkOrderDetailView: View {
     @State private var assignedTo: String
     @State private var status: String
     @State private var statusNote: String
-    @State private var pickerItems: [PhotosPickerItem] = []
     @State private var selectedMedia: [SelectedMedia] = []
+    @State private var pickerMode: MediaPickerMode?
+    @State private var sharePayload: SharePayload?
 
     init(order: WorkOrder) {
         initialOrder = order
@@ -48,11 +47,11 @@ struct WorkOrderDetailView: View {
                     }
                     Text("Created \(formatWorkOrderDate(order.createdAt))")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
                 }
             }
 
-            Section("Work") {
+            Section(header: Text("Work")) {
                 if app.user?.role == Role.admin.rawValue {
                     Picker("Store", selection: $storeNumber) {
                         Text("All Stores").tag(99)
@@ -61,12 +60,24 @@ struct WorkOrderDetailView: View {
                         }
                     }
                 } else {
-                    LabeledContent("Store", value: "\(storeNumber)")
+                    HStack {
+                        Text("Store")
+                        Spacer()
+                        Text("\(storeNumber)")
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 TextField("Title", text: $title)
-                TextField("Description", text: $description, axis: .vertical)
-                    .lineLimit(4...8)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Description")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    TextEditor(text: $description)
+                        .frame(minHeight: 110)
+                }
+
                 TextField("Requested by", text: $requestedBy)
                     .disabled(true)
                 TextField("Location", text: $location)
@@ -85,32 +96,50 @@ struct WorkOrderDetailView: View {
                 }
             }
 
-            Section("Status") {
+            Section(header: Text("Status")) {
                 Picker("Status", selection: $status) {
                     ForEach(WorkOrderStatus.allCases) { item in
                         Text(item.label).tag(item.rawValue)
                     }
                 }
-                TextField("Status note", text: $statusNote, axis: .vertical)
-                    .lineLimit(2...5)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Status note")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    TextEditor(text: $statusNote)
+                        .frame(minHeight: 80)
+                }
             }
 
-            Section("Attachments") {
+            Section(header: Text("Attachments")) {
                 if order.attachments.isEmpty {
                     Text("No attachments")
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
                 } else {
                     ForEach(order.attachments) { attachment in
                         AttachmentPreviewRow(attachment: attachment)
                     }
                 }
 
-                PhotosPicker(
-                    selection: $pickerItems,
-                    maxSelectionCount: 8,
-                    matching: .any(of: [.images, .videos])
-                ) {
-                    Label("Choose Photos or Videos", systemImage: "photo.on.rectangle")
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    Button {
+                        pickerMode = .cameraPhoto
+                    } label: {
+                        Label("Take Photo", systemImage: "camera")
+                    }
+
+                    Button {
+                        pickerMode = .cameraVideo
+                    } label: {
+                        Label("Record Video", systemImage: "video")
+                    }
+                }
+
+                Button {
+                    pickerMode = .library
+                } label: {
+                    Label("Choose From Device", systemImage: "photo.on.rectangle")
                 }
 
                 ForEach(selectedMedia) { item in
@@ -122,7 +151,7 @@ struct WorkOrderDetailView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                         }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(BorderlessButtonStyle())
                     }
                 }
 
@@ -130,7 +159,6 @@ struct WorkOrderDetailView: View {
                     Task {
                         if await app.uploadAttachments(workOrderID: order.id, media: selectedMedia) {
                             selectedMedia = []
-                            pickerItems = []
                         }
                     }
                 } label: {
@@ -164,10 +192,9 @@ struct WorkOrderDetailView: View {
                 }
                 .disabled(title.trimmed.isEmpty || description.trimmed.isEmpty || location.trimmed.isEmpty)
 
-                ShareLink(
-                    item: shareText(for: order),
-                    subject: Text("Work Order \(order.workOrderNumber)")
-                ) {
+                Button {
+                    sharePayload = SharePayload(text: shareText(for: order))
+                } label: {
                     Label("Share", systemImage: "square.and.arrow.up")
                         .frame(maxWidth: .infinity)
                 }
@@ -175,13 +202,20 @@ struct WorkOrderDetailView: View {
         }
         .navigationTitle(order.workOrderNumber)
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            if app.assignees.isEmpty {
-                await app.loadAssignees()
+        .sheet(item: $pickerMode) { mode in
+            MediaPicker(mode: mode) { media in
+                selectedMedia.append(media)
             }
         }
-        .onChange(of: pickerItems) { _, newItems in
-            Task { selectedMedia.append(contentsOf: await loadMedia(from: newItems)) }
+        .sheet(item: $sharePayload) { payload in
+            ActivityView(activityItems: [payload.text])
+        }
+        .onAppear {
+            Task {
+                if app.assignees.isEmpty {
+                    await app.loadAssignees()
+                }
+            }
         }
     }
 
@@ -202,27 +236,6 @@ struct WorkOrderDetailView: View {
         .compactMap { $0 }
         .joined(separator: "\n")
     }
-
-    private func loadMedia(from items: [PhotosPickerItem]) async -> [SelectedMedia] {
-        var media: [SelectedMedia] = []
-        for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self) else {
-                continue
-            }
-            let type = item.supportedContentTypes.first
-            let ext = type?.preferredFilenameExtension ?? "bin"
-            let mimeType = type?.preferredMIMEType ?? "application/octet-stream"
-            let prefix = mimeType.hasPrefix("video/") ? "video" : "photo"
-            media.append(
-                SelectedMedia(
-                    filename: "\(prefix)_\(Int(Date().timeIntervalSince1970)).\(ext)",
-                    mimeType: mimeType,
-                    data: data
-                )
-            )
-        }
-        return media
-    }
 }
 
 struct AttachmentPreviewRow: View {
@@ -239,10 +252,10 @@ struct AttachmentPreviewRow: View {
                 Spacer()
                 Text(ByteCountFormatter.string(fromByteCount: attachment.sizeBytes, countStyle: .file))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.secondary)
             }
 
-            if let image {
+            if let image = image {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
@@ -250,16 +263,34 @@ struct AttachmentPreviewRow: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else if attachment.contentType.hasPrefix("image/") && !loadFailed {
                 ProgressView()
-                    .task(id: attachment.id) {
-                        do {
-                            let data = try await app.attachmentData(id: attachment.id)
-                            image = UIImage(data: data)
-                            loadFailed = image == nil
-                        } catch {
-                            loadFailed = true
+                    .onAppear {
+                        Task {
+                            do {
+                                let data = try await app.attachmentData(id: attachment.id)
+                                image = UIImage(data: data)
+                                loadFailed = image == nil
+                            } catch {
+                                loadFailed = true
+                            }
                         }
                     }
             }
         }
+    }
+}
+
+struct SharePayload: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
+struct ActivityView: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
     }
 }

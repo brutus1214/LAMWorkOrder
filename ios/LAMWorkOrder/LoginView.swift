@@ -12,14 +12,14 @@ struct LoginView: View {
     @State private var phoneNumber = ""
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("LA MART OPERATIONS")
                             .font(.caption)
                             .fontWeight(.bold)
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundColor(Color.accentColor)
                         Text(createMode ? "Create new user" : "Sign in")
                             .font(.largeTitle.bold())
                     }
@@ -69,13 +69,14 @@ struct LoginView: View {
             }
             .background(Color(.systemGroupedBackground))
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 
     private var createAccountFields: some View {
         Group {
             Text("New accounts start as Requester. A manager can change the role later.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundColor(.secondary)
 
             TextField("Full name", text: $displayName)
                 .textContentType(.name)

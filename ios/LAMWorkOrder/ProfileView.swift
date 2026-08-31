@@ -8,9 +8,9 @@ struct ProfileView: View {
     @State private var email = ""
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
-                Section("Profile") {
+                Section(header: Text("Profile")) {
                     TextField("Display name", text: $displayName)
                     TextField("Email", text: $email)
                         .keyboardType(.emailAddress)
@@ -18,21 +18,36 @@ struct ProfileView: View {
                         .autocorrectionDisabled()
 
                     if let user = app.user {
-                        LabeledContent("Username", value: user.username)
-                        LabeledContent("Role", value: user.role)
-                        LabeledContent("Store", value: user.storeLabel)
+                        HStack {
+                            Text("Username")
+                            Spacer()
+                            Text(user.username)
+                                .foregroundColor(.secondary)
+                        }
+                        HStack {
+                            Text("Role")
+                            Spacer()
+                            Text(user.role)
+                                .foregroundColor(.secondary)
+                        }
+                        HStack {
+                            Text("Store")
+                            Spacer()
+                            Text(user.storeLabel)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         Task {
                             if await app.updateProfile(displayName: displayName.trimmed, email: email) {
@@ -48,5 +63,6 @@ struct ProfileView: View {
                 email = app.user?.email ?? ""
             }
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }

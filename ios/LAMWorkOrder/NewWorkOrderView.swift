@@ -1,6 +1,4 @@
-import PhotosUI
 import SwiftUI
-import UniformTypeIdentifiers
 import UIKit
 
 struct NewWorkOrderView: View {
@@ -13,18 +11,17 @@ struct NewWorkOrderView: View {
     @State private var location = ""
     @State private var priority = Priority.normal.rawValue
     @State private var assignedTo = ""
-    @State private var pickerItems: [PhotosPickerItem] = []
     @State private var selectedMedia: [SelectedMedia] = []
-    @State private var showingCamera = false
+    @State private var pickerMode: MediaPickerMode?
 
     private var user: User? {
         app.user
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             Form {
-                Section("Work") {
+                Section(header: Text("Work")) {
                     if user?.role == Role.admin.rawValue {
                         Picker("Store", selection: $storeNumber) {
                             Text("All Stores").tag(99)
@@ -33,12 +30,24 @@ struct NewWorkOrderView: View {
                             }
                         }
                     } else {
-                        LabeledContent("Store", value: "\(storeNumber)")
+                        HStack {
+                            Text("Store")
+                            Spacer()
+                            Text("\(storeNumber)")
+                                .foregroundColor(.secondary)
+                        }
                     }
 
                     TextField("Title", text: $title)
-                    TextField("Description", text: $description, axis: .vertical)
-                        .lineLimit(4...8)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Description")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextEditor(text: $description)
+                            .frame(minHeight: 110)
+                    }
+
                     TextField("Requested by", text: .constant(user?.displayName ?? ""))
                         .disabled(true)
                     TextField("Location", text: $location)
@@ -57,20 +66,24 @@ struct NewWorkOrderView: View {
                     }
                 }
 
-                Section("Photos and Videos") {
+                Section(header: Text("Photos and Videos")) {
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
                         Button {
-                            showingCamera = true
+                            pickerMode = .cameraPhoto
                         } label: {
                             Label("Take Photo", systemImage: "camera")
                         }
+
+                        Button {
+                            pickerMode = .cameraVideo
+                        } label: {
+                            Label("Record Video", systemImage: "video")
+                        }
                     }
 
-                    PhotosPicker(
-                        selection: $pickerItems,
-                        maxSelectionCount: 8,
-                        matching: .any(of: [.images, .videos])
-                    ) {
+                    Button {
+                        pickerMode = .library
+                    } label: {
                         Label("Choose From Device", systemImage: "photo.on.rectangle")
                     }
 
@@ -83,7 +96,7 @@ struct NewWorkOrderView: View {
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
                             }
-                            .buttonStyle(.borderless)
+                            .buttonStyle(BorderlessButtonStyle())
                         }
                     }
                 }
@@ -91,15 +104,15 @@ struct NewWorkOrderView: View {
             .navigationTitle("New Work Order")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Create") {
                         Task {
-                            guard let user else { return }
+                            guard let user = user else { return }
                             let created = await app.createWorkOrder(
                                 CreateWorkOrder(
                                     storeNumber: storeNumber,
@@ -121,21 +134,21 @@ struct NewWorkOrderView: View {
                     .disabled(!canCreate)
                 }
             }
-            .sheet(isPresented: $showingCamera) {
-                CameraPhotoPicker { media in
-                    selectedMedia.append(media)
-                }
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+        .sheet(item: $pickerMode) { mode in
+            MediaPicker(mode: mode) { media in
+                selectedMedia.append(media)
             }
-            .task {
-                if let user, storeNumber == 1 {
-                    storeNumber = user.role == Role.admin.rawValue ? 1 : user.storeNumber
-                }
+        }
+        .onAppear {
+            if let currentUser = user, storeNumber == 1 {
+                storeNumber = currentUser.role == Role.admin.rawValue ? 1 : currentUser.storeNumber
+            }
+            Task {
                 if app.assignees.isEmpty {
                     await app.loadAssignees()
                 }
-            }
-            .onChange(of: pickerItems) { _, newItems in
-                Task { selectedMedia.append(contentsOf: await loadMedia(from: newItems)) }
             }
         }
     }
@@ -144,26 +157,5 @@ struct NewWorkOrderView: View {
         title.trimmed.isEmpty == false
             && description.trimmed.isEmpty == false
             && location.trimmed.isEmpty == false
-    }
-
-    private func loadMedia(from items: [PhotosPickerItem]) async -> [SelectedMedia] {
-        var media: [SelectedMedia] = []
-        for item in items {
-            guard let data = try? await item.loadTransferable(type: Data.self) else {
-                continue
-            }
-            let type = item.supportedContentTypes.first
-            let ext = type?.preferredFilenameExtension ?? "bin"
-            let mimeType = type?.preferredMIMEType ?? "application/octet-stream"
-            let prefix = mimeType.hasPrefix("video/") ? "video" : "photo"
-            media.append(
-                SelectedMedia(
-                    filename: "\(prefix)_\(Int(Date().timeIntervalSince1970)).\(ext)",
-                    mimeType: mimeType,
-                    data: data
-                )
-            )
-        }
-        return media
     }
 }

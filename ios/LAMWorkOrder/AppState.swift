@@ -26,7 +26,7 @@ final class AppState: ObservableObject {
     }
 
     func restoreSession() async {
-        guard let token else { return }
+        guard let token = token else { return }
         loading = true
         defer { loading = false }
         do {
@@ -85,7 +85,7 @@ final class AppState: ObservableObject {
     }
 
     func refresh(search: String? = nil) async {
-        guard let token else { return }
+        guard let token = token else { return }
         loading = true
         defer { loading = false }
         do {
@@ -97,7 +97,7 @@ final class AppState: ObservableObject {
     }
 
     func loadAssignees() async {
-        guard let token else { return }
+        guard let token = token else { return }
         do {
             assignees = try await api.assignees(token: token)
         } catch {
@@ -106,7 +106,7 @@ final class AppState: ObservableObject {
     }
 
     func loadUsers() async {
-        guard let token else { return }
+        guard let token = token else { return }
         loading = true
         defer { loading = false }
         do {
@@ -118,7 +118,7 @@ final class AppState: ObservableObject {
     }
 
     func createWorkOrder(_ request: CreateWorkOrder, media: [SelectedMedia]) async -> Bool {
-        guard let token else { return false }
+        guard let token = token else { return false }
         loading = true
         defer { loading = false }
         do {
@@ -136,7 +136,7 @@ final class AppState: ObservableObject {
     }
 
     func updateWorkOrder(id: String, request: UpdateWorkOrder) async -> Bool {
-        guard let token else { return false }
+        guard let token = token else { return false }
         loading = true
         defer { loading = false }
         do {
@@ -151,7 +151,7 @@ final class AppState: ObservableObject {
     }
 
     func updateStatus(id: String, status: String, note: String?) async -> Bool {
-        guard let token else { return false }
+        guard let token = token else { return false }
         loading = true
         defer { loading = false }
         do {
@@ -166,7 +166,7 @@ final class AppState: ObservableObject {
     }
 
     func uploadAttachments(workOrderID: String, media: [SelectedMedia]) async -> Bool {
-        guard let token else { return false }
+        guard let token = token else { return false }
         loading = true
         defer { loading = false }
         do {
@@ -181,14 +181,14 @@ final class AppState: ObservableObject {
     }
 
     func attachmentData(id: String) async throws -> Data {
-        guard let token else {
+        guard let token = token else {
             throw APIError.server("Sign in again.")
         }
         return try await api.attachmentContent(token: token, id: id)
     }
 
     func updateProfile(displayName: String, email: String?) async -> Bool {
-        guard let token else { return false }
+        guard let token = token else { return false }
         loading = true
         defer { loading = false }
         do {
@@ -205,7 +205,7 @@ final class AppState: ObservableObject {
     }
 
     func updateUser(id: String, request: UserAdminUpdate) async -> Bool {
-        guard let token else { return false }
+        guard let token = token else { return false }
         loading = true
         defer { loading = false }
         do {
@@ -220,7 +220,7 @@ final class AppState: ObservableObject {
     }
 
     func resetPassword(userID: String, password: String) async -> Bool {
-        guard let token else { return false }
+        guard let token = token else { return false }
         loading = true
         defer { loading = false }
         do {

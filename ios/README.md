@@ -6,10 +6,12 @@ The iPhone app uses the same FastAPI backend as the Android, web, and Windows cl
 
 ## Requirements
 
-- Mac with Xcode installed
+- Mac with Xcode installed. On macOS 11 Big Sur, use Xcode 13.2.1.
 - iPhone with Developer Mode enabled
 - Apple ID signed in to Xcode
 - Apple Developer Program membership for TestFlight, App Store, or client distribution
+
+The project is saved in Xcode 13 format and targets iOS 15 so it can open on older Big Sur Macs.
 
 ## Run from Xcode
 

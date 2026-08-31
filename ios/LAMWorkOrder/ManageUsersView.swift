@@ -5,21 +5,21 @@ struct ManageUsersView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             List(app.users) { user in
-                NavigationLink {
+                NavigationLink(destination:
                     UserEditView(user: user)
-                } label: {
+                ) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(user.displayName)
                             .font(.headline)
                         Text("\(user.role) - \(user.storeLabel)")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(.secondary)
                         if user.isActive == false {
                             Text("Inactive")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(.red)
+                                .foregroundColor(.red)
                         }
                     }
                     .padding(.vertical, 4)
@@ -28,12 +28,12 @@ struct ManageUsersView: View {
             .navigationTitle("Manage Users")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         Task { await app.loadUsers() }
                     } label: {
@@ -41,10 +41,13 @@ struct ManageUsersView: View {
                     }
                 }
             }
-            .task {
-                await app.loadUsers()
+            .onAppear {
+                Task {
+                    await app.loadUsers()
+                }
             }
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 }
 
@@ -73,7 +76,7 @@ struct UserEditView: View {
 
     var body: some View {
         Form {
-            Section("Account") {
+            Section(header: Text("Account")) {
                 TextField("Display name", text: $displayName)
                 TextField("Email", text: $email)
                     .keyboardType(.emailAddress)
@@ -119,7 +122,7 @@ struct UserEditView: View {
                 .disabled(displayName.trimmed.isEmpty)
             }
 
-            Section("Password") {
+            Section(header: Text("Password")) {
                 SecureField("New password", text: $newPassword)
                 Button {
                     Task {
@@ -135,7 +138,7 @@ struct UserEditView: View {
 
                 if passwordReset {
                     Text("Password reset.")
-                        .foregroundStyle(.green)
+                        .foregroundColor(.green)
                 }
             }
         }

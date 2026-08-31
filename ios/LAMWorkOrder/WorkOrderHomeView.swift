@@ -14,7 +14,7 @@ struct WorkOrderHomeView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationView {
             VStack(spacing: 0) {
                 header
                 filterBar
@@ -24,14 +24,14 @@ struct WorkOrderHomeView: View {
             .navigationTitle("Work orders")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button {
                         showingCreate = true
                     } label: {
                         Label("New Work Order", systemImage: "plus")
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
                         if app.canManageUsers {
                             Button {
@@ -68,15 +68,18 @@ struct WorkOrderHomeView: View {
             .sheet(isPresented: $showingUsers) {
                 ManageUsersView()
             }
-            .task {
-                if app.orders.isEmpty {
-                    await app.refresh()
-                }
-                if app.assignees.isEmpty {
-                    await app.loadAssignees()
+            .onAppear {
+                Task {
+                    if app.orders.isEmpty {
+                        await app.refresh()
+                    }
+                    if app.assignees.isEmpty {
+                        await app.loadAssignees()
+                    }
                 }
             }
         }
+        .navigationViewStyle(StackNavigationViewStyle())
     }
 
     private var header: some View {
@@ -87,13 +90,13 @@ struct WorkOrderHomeView: View {
                         .font(.headline)
                     Text("\(user.role) - \(user.storeLabel)")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundColor(.secondary)
                 }
             }
 
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+                    .foregroundColor(.secondary)
                 TextField("Search number, title, location", text: $search)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -111,7 +114,7 @@ struct WorkOrderHomeView: View {
                 .buttonStyle(.borderless)
             }
             .padding(12)
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8))
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color(.secondarySystemGroupedBackground)))
         }
         .padding([.horizontal, .top], 16)
         .padding(.bottom, 10)
@@ -128,8 +131,11 @@ struct WorkOrderHomeView: View {
                             .font(.subheadline.weight(.medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .foregroundStyle(filter == item ? Color.white : Color.primary)
-                            .background(filter == item ? Color.accentColor : Color(.secondarySystemGroupedBackground), in: Capsule())
+                            .foregroundColor(filter == item ? Color.white : Color.primary)
+                            .background(
+                                Capsule()
+                                    .fill(filter == item ? Color.accentColor : Color(.secondarySystemGroupedBackground))
+                            )
                     }
                     .buttonStyle(.plain)
                 }
@@ -142,12 +148,22 @@ struct WorkOrderHomeView: View {
     private var orderList: some View {
         Group {
             if visibleOrders.isEmpty {
-                ContentUnavailableView("No work orders", systemImage: "tray", description: Text("Pull down to refresh."))
+                VStack(spacing: 12) {
+                    Image(systemName: "tray")
+                        .font(.largeTitle)
+                        .foregroundColor(.secondary)
+                    Text("No work orders")
+                        .font(.headline)
+                    Text("Pull down to refresh.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(visibleOrders) { order in
-                    NavigationLink {
+                    NavigationLink(destination:
                         WorkOrderDetailView(order: order)
-                    } label: {
+                    ) {
                         WorkOrderRow(order: order)
                     }
                 }
@@ -180,7 +196,7 @@ struct WorkOrderRow: View {
                     .fontWeight(order.priority == Priority.emergency.rawValue ? .bold : .regular)
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundColor(.secondary)
 
             HStack {
                 Text("Store \(order.storeNumber)")
@@ -191,7 +207,7 @@ struct WorkOrderRow: View {
                 }
             }
             .font(.caption2)
-            .foregroundStyle(.secondary)
+            .foregroundColor(.secondary)
         }
         .padding(.vertical, 6)
     }
@@ -205,8 +221,8 @@ struct StatusBadge: View {
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .foregroundStyle(color)
-            .background(color.opacity(0.12), in: Capsule())
+            .foregroundColor(color)
+            .background(Capsule().fill(color.opacity(0.12)))
     }
 
     private var color: Color {

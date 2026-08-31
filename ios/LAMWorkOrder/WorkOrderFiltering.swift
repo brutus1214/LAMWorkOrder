@@ -74,7 +74,7 @@ private extension WorkOrder {
     }
 
     func hasUserName(_ user: User?) -> Bool {
-        guard let user else { return false }
+        guard let user = user else { return false }
         let names = Set([
             user.displayName.normalizedIdentity,
             user.username.normalizedIdentity,
