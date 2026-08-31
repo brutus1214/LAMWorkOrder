@@ -18,7 +18,7 @@ struct ContentView: View {
                     ProgressView()
                         .controlSize(.large)
                         .padding(24)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
                 }
             }
         }

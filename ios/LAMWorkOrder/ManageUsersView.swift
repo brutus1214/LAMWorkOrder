@@ -80,8 +80,8 @@ struct UserEditView: View {
                 TextField("Display name", text: $displayName)
                 TextField("Email", text: $email)
                     .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
                 TextField("Phone number", text: $phoneNumber)
                     .keyboardType(.phonePad)
 

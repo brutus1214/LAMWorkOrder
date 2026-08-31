@@ -14,8 +14,8 @@ struct ProfileView: View {
                     TextField("Display name", text: $displayName)
                     TextField("Email", text: $email)
                         .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
 
                     if let user = app.user {
                         HStack {

@@ -80,8 +80,8 @@ struct LoginView: View {
 
             TextField("Full name", text: $displayName)
                 .textContentType(.name)
-                .textInputAutocapitalization(.words)
-                .textFieldStyle(.roundedBorder)
+                .autocapitalization(.words)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
 
             Picker("Store", selection: $storeNumber) {
                 ForEach(1...9, id: \.self) { store in
@@ -93,14 +93,14 @@ struct LoginView: View {
             TextField("Email", text: $email)
                 .keyboardType(.emailAddress)
                 .textContentType(.emailAddress)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
 
             TextField("Phone number for texting", text: $phoneNumber)
                 .keyboardType(.phonePad)
                 .textContentType(.telephoneNumber)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
         }
     }
 
@@ -108,13 +108,13 @@ struct LoginView: View {
         Group {
             TextField("Username or email", text: $username)
                 .textContentType(.username)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .textFieldStyle(.roundedBorder)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
 
             SecureField("Password", text: $password)
                 .textContentType(createMode ? .newPassword : .password)
-                .textFieldStyle(.roundedBorder)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
         }
     }
 

@@ -98,8 +98,8 @@ struct WorkOrderHomeView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
                 TextField("Search number, title, location", text: $search)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
                     .onSubmit {
                         Task { await app.refresh(search: search) }
                     }
