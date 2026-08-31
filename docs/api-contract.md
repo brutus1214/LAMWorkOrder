@@ -1,50 +1,29 @@
 # API Contract
 
-The Version 1 API is intentionally small and centered on work-order queue operations.
+Interactive OpenAPI is at `/docs`.
 
-## Health
+- `GET /health`
+- `GET /api/work-orders?status=&priority=&search=`
+- `GET /api/work-orders/{id}`
+- `GET /api/technicians`
+- `GET /api/assignees` (active Employees, Security, Managers, and Technicians)
+- `GET /api/work-order-notification-recipients?storeNumber=`
+- `POST /api/work-orders`
+- `PATCH /api/work-orders/{id}/status`
+- `PUT /api/work-orders/{id}` (Admin all stores; Manager same store; Employee/Security when creator or assignee; Technician when assignee)
+- `DELETE /api/work-orders/{id}` (`jc` only)
+- `POST /api/work-orders/{id}/attachments` (same role scope as work-order updates; requesters can attach to their own submissions)
+- `GET /api/attachments/{id}/content`
+- `DELETE /api/attachments/{id}` (Admin or Manager)
 
-`GET /health`
+Authentication uses `Authorization: Bearer <token>` for all `/api` resources except login:
 
-Returns service status and current server time.
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/profile`
+- `PATCH /api/profile`
 
-## Work Orders
+Roles are `Requester`, `Employee`, `Security`, `Technician`, `Manager`, and `Admin`. Fresh installations seed one account per role with the temporary password `ChangeMe123!`; deployments should change these credentials before use. Existing SQLite work-order records are retained by additive startup migrations.
 
-`GET /api/work-orders`
-
-Optional query parameters:
-
-- `status`: `New`, `Scheduled`, `InProgress`, `Blocked`, `Completed`, or `Cancelled`
-- `priority`: `Low`, `Normal`, `High`, or `Emergency`
-- `search`: title, location, requester, assignee, or work-order number text
-
-`GET /api/work-orders/{id}`
-
-Returns one work order by identifier.
-
-`POST /api/work-orders`
-
-Creates a work order.
-
-```json
-{
-  "title": "Replace line filter",
-  "description": "Filter housing is leaking near bay 4.",
-  "requestedBy": "A. Rivera",
-  "location": "Line 2 / Bay 4",
-  "priority": "High",
-  "assignedTo": "Maintenance",
-  "dueAt": "2026-08-03T18:00:00Z"
-}
-```
-
-`PATCH /api/work-orders/{id}/status`
-
-Updates the workflow status.
-
-```json
-{
-  "status": "InProgress",
-  "note": "Technician dispatched."
-}
-```
+Statuses: `New`, `Scheduled`, `InProgress`, `Blocked`, `Completed`, `Cancelled`.
+Priorities: `Low`, `Normal`, `High`, `Emergency`. JSON uses camelCase.

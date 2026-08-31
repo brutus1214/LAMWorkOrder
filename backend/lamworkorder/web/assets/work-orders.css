@@ -1,0 +1,12 @@
+.order-number {
+  display: flex;
+  align-items: baseline;
+  gap: .5rem;
+  white-space: nowrap;
+}
+
+.order-number .created-date {
+  display: inline;
+  color: #738194;
+  font-size: .78rem;
+}
