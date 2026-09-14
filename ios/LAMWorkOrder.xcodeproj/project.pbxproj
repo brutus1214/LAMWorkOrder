@@ -22,6 +22,7 @@
 		00000000000000000000010D /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000000D /* ProfileView.swift */; };
 		00000000000000000000010E /* ManageUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000000E /* ManageUsersView.swift */; };
 		00000000000000000000010F /* CameraPhotoPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000000F /* CameraPhotoPicker.swift */; };
+		000000000000000000000111 /* WorkOrderSharing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000010 /* WorkOrderSharing.swift */; };
 		000000000000000000000110 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000020 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -41,6 +42,7 @@
 		00000000000000000000000D /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		00000000000000000000000E /* ManageUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageUsersView.swift; sourceTree = "<group>"; };
 		00000000000000000000000F /* CameraPhotoPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPhotoPicker.swift; sourceTree = "<group>"; };
+		000000000000000000000010 /* WorkOrderSharing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkOrderSharing.swift; sourceTree = "<group>"; };
 		000000000000000000000020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		000000000000000000000021 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		000000000000000000000030 /* LAMWorkOrder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LAMWorkOrder.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -83,6 +85,7 @@
 				00000000000000000000000D /* ProfileView.swift */,
 				00000000000000000000000E /* ManageUsersView.swift */,
 				00000000000000000000000F /* CameraPhotoPicker.swift */,
+				000000000000000000000010 /* WorkOrderSharing.swift */,
 				000000000000000000000020 /* Assets.xcassets */,
 				000000000000000000000021 /* Info.plist */,
 			);
@@ -181,6 +184,7 @@
 				00000000000000000000010D /* ProfileView.swift in Sources */,
 				00000000000000000000010E /* ManageUsersView.swift in Sources */,
 				00000000000000000000010F /* CameraPhotoPicker.swift in Sources */,
+				000000000000000000000111 /* WorkOrderSharing.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

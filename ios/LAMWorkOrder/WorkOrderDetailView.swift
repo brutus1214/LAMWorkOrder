@@ -1,6 +1,12 @@
 import SwiftUI
 import UIKit
 
+private enum WorkOrderSendDestination {
+    case share
+    case text(String)
+    case email([String])
+}
+
 struct WorkOrderDetailView: View {
     @EnvironmentObject private var app: AppState
 
@@ -16,7 +22,9 @@ struct WorkOrderDetailView: View {
     @State private var statusNote: String
     @State private var selectedMedia: [SelectedMedia] = []
     @State private var pickerMode: MediaPickerMode?
-    @State private var sharePayload: SharePayload?
+    @State private var vendorEmail = ""
+    @State private var preparingSend = false
+    @State private var sendPayload: WorkOrderSendPayload?
 
     init(order: WorkOrder) {
         initialOrder = order
@@ -35,6 +43,25 @@ struct WorkOrderDetailView: View {
         app.orders.first { $0.id == initialOrder.id } ?? initialOrder
     }
 
+    private var contacts: [User] {
+        var seenIDs: Set<String> = []
+        return ([app.user].compactMap { $0 } + app.users + app.assignees).filter { user in
+            seenIDs.insert(user.id).inserted
+        }
+    }
+
+    private var requesterContact: User? {
+        findWorkOrderContact(in: contacts, name: requestedBy)
+    }
+
+    private var assigneeContact: User? {
+        findWorkOrderContact(in: contacts, name: assignedTo)
+    }
+
+    private var validVendorEmail: Bool {
+        vendorEmail.trimmed.isEmpty || isValidEmail(vendorEmail)
+    }
+
     var body: some View {
         Form {
             Section {
@@ -48,6 +75,74 @@ struct WorkOrderDetailView: View {
                     Text("Created \(formatWorkOrderDate(order.createdAt))")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
+                }
+            }
+
+            Section(header: Text("Send work order")) {
+                Menu {
+                    Button {
+                        startSend(.share)
+                    } label: {
+                        Label("Share work order", systemImage: "square.and.arrow.up")
+                    }
+
+                    Button {
+                        if let phone = textNumber(for: requesterContact) {
+                            startSend(.text(phone))
+                        }
+                    } label: {
+                        Label("Text requester", systemImage: "message")
+                    }
+                    .disabled(textNumber(for: requesterContact) == nil || canTextWorkOrder() == false)
+
+                    Button {
+                        if let email = emailAddress(for: requesterContact) {
+                            startSend(.email([email]))
+                        }
+                    } label: {
+                        Label("Email requester", systemImage: "envelope")
+                    }
+                    .disabled(emailAddress(for: requesterContact) == nil || canEmailWorkOrder() == false)
+
+                    Button {
+                        if let phone = textNumber(for: assigneeContact) {
+                            startSend(.text(phone))
+                        }
+                    } label: {
+                        Label("Text assignee", systemImage: "message")
+                    }
+                    .disabled(textNumber(for: assigneeContact) == nil || canTextWorkOrder() == false)
+
+                    Button {
+                        if let email = emailAddress(for: assigneeContact) {
+                            startSend(.email([email]))
+                        }
+                    } label: {
+                        Label("Email assignee", systemImage: "envelope")
+                    }
+                    .disabled(emailAddress(for: assigneeContact) == nil || canEmailWorkOrder() == false)
+
+                    Button {
+                        startSend(.email([vendorEmail.trimmed]))
+                    } label: {
+                        Label("Email vendor", systemImage: "envelope")
+                    }
+                    .disabled(vendorEmail.trimmed.isEmpty || validVendorEmail == false || canEmailWorkOrder() == false)
+                } label: {
+                    Label(preparingSend ? "Preparing..." : "Send...", systemImage: preparingSend ? "hourglass" : "paperplane")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(preparingSend)
+
+                TextField("Vendor email", text: $vendorEmail)
+                    .keyboardType(.emailAddress)
+                    .autocapitalization(.none)
+                    .disableAutocorrection(true)
+
+                if validVendorEmail == false {
+                    Text("Enter a valid email address.")
+                        .font(.caption)
+                        .foregroundColor(.red)
                 }
             }
 
@@ -191,13 +286,6 @@ struct WorkOrderDetailView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .disabled(title.trimmed.isEmpty || description.trimmed.isEmpty || location.trimmed.isEmpty)
-
-                Button {
-                    sharePayload = SharePayload(text: shareText(for: order))
-                } label: {
-                    Label("Share", systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
-                }
             }
         }
         .navigationTitle(order.workOrderNumber)
@@ -207,34 +295,114 @@ struct WorkOrderDetailView: View {
                 selectedMedia.append(media)
             }
         }
-        .sheet(item: $sharePayload) { payload in
-            ActivityView(activityItems: [payload.text])
+        .sheet(item: $sendPayload) { payload in
+            sendSheet(for: payload)
         }
         .onAppear {
             Task {
                 if app.assignees.isEmpty {
                     await app.loadAssignees()
                 }
+                if app.user?.role == Role.admin.rawValue || app.user?.role == Role.manager.rawValue {
+                    if app.users.isEmpty {
+                        await app.loadUsers()
+                    }
+                }
             }
         }
     }
 
-    private func shareText(for order: WorkOrder) -> String {
-        [
-            "Work Order \(order.workOrderNumber)",
-            "Created: \(formatWorkOrderDate(order.createdAt))",
-            "Store: \(storeNumber)",
-            "Location: \(location)",
-            "Status: \((WorkOrderStatus(rawValue: status) ?? order.statusValue).label)",
-            "Priority: \(priority)",
-            "Title: \(title)",
-            "Description: \(description)",
-            "Requested by: \(requestedBy)",
-            assignedTo.trimmed.isEmpty ? nil : "Assigned to: \(assignedTo)",
-            statusNote.trimmed.isEmpty ? nil : "Status note: \(statusNote)"
-        ]
-        .compactMap { $0 }
-        .joined(separator: "\n")
+    private var shareSubject: String {
+        workOrderShareSubject(for: order)
+    }
+
+    private var shareMessage: String {
+        workOrderShareText(
+            for: order,
+            storeNumber: storeNumber,
+            title: title,
+            description: description,
+            requestedBy: requestedBy,
+            location: location,
+            priority: priority,
+            assignedTo: assignedTo.trimmed.nilIfBlank,
+            status: status,
+            statusNote: statusNote.trimmed.nilIfBlank
+        )
+    }
+
+    @ViewBuilder
+    private func sendSheet(for payload: WorkOrderSendPayload) -> some View {
+        switch payload.kind {
+        case .share(let subject, let message, let attachments):
+            WorkOrderActivityView(subject: subject, message: message, attachments: attachments)
+        case .text(let recipient, let message, let attachments):
+            WorkOrderMessageComposeView(recipient: recipient, message: message, attachments: attachments)
+        case .email(let recipients, let subject, let message, let attachments):
+            WorkOrderMailComposeView(
+                recipients: recipients,
+                subject: subject,
+                message: message,
+                attachments: attachments
+            )
+        }
+    }
+
+    private func startSend(_ destination: WorkOrderSendDestination) {
+        guard preparingSend == false else { return }
+
+        let subject = shareSubject
+        let message = shareMessage
+        let attachments = order.attachments
+
+        preparingSend = true
+        Task { @MainActor in
+            defer { preparingSend = false }
+
+            switch destination {
+            case .text:
+                guard canTextWorkOrder() else {
+                    app.errorMessage = "Text messages are not available on this device."
+                    return
+                }
+            case .email:
+                guard canEmailWorkOrder() else {
+                    app.errorMessage = "Email is not available on this device."
+                    return
+                }
+            case .share:
+                break
+            }
+
+            let preparation = await prepareWorkOrderAttachments(app: app, attachments: attachments)
+            if attachments.isEmpty == false && preparation.attachments.isEmpty {
+                app.errorMessage = "Unable to attach pictures or videos."
+                return
+            }
+            if preparation.failedCount > 0 {
+                app.errorMessage = "Some attachments could not be added."
+            }
+
+            switch destination {
+            case .share:
+                sendPayload = WorkOrderSendPayload(
+                    kind: .share(subject: subject, message: message, attachments: preparation.attachments)
+                )
+            case .text(let phone):
+                sendPayload = WorkOrderSendPayload(
+                    kind: .text(recipient: phone, message: message, attachments: preparation.attachments)
+                )
+            case .email(let recipients):
+                sendPayload = WorkOrderSendPayload(
+                    kind: .email(
+                        recipients: recipients,
+                        subject: subject,
+                        message: message,
+                        attachments: preparation.attachments
+                    )
+                )
+            }
+        }
     }
 }
 
@@ -276,21 +444,5 @@ struct AttachmentPreviewRow: View {
                     }
             }
         }
-    }
-}
-
-struct SharePayload: Identifiable {
-    let id = UUID()
-    let text: String
-}
-
-struct ActivityView: UIViewControllerRepresentable {
-    let activityItems: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
     }
 }
