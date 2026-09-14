@@ -117,36 +117,36 @@ final class AppState: ObservableObject {
         }
     }
 
-    func createWorkOrder(_ request: CreateWorkOrder, media: [SelectedMedia]) async -> Bool {
-        guard let token = token else { return false }
+    func createWorkOrder(_ request: CreateWorkOrder, media: [SelectedMedia]) async -> WorkOrder? {
+        guard let token = token else { return nil }
         loading = true
         defer { loading = false }
         do {
-            let created = try await api.createWorkOrder(token: token, request: request)
+            var created = try await api.createWorkOrder(token: token, request: request)
             if !media.isEmpty {
-                _ = try await api.uploadAttachments(token: token, workOrderID: created.id, media: media)
+                created.attachments = try await api.uploadAttachments(token: token, workOrderID: created.id, media: media)
             }
             orders = try await api.listWorkOrders(token: token)
             errorMessage = nil
-            return true
+            return created
         } catch {
             errorMessage = userMessage(from: error)
-            return false
+            return nil
         }
     }
 
-    func updateWorkOrder(id: String, request: UpdateWorkOrder) async -> Bool {
-        guard let token = token else { return false }
+    func updateWorkOrder(id: String, request: UpdateWorkOrder) async -> WorkOrder? {
+        guard let token = token else { return nil }
         loading = true
         defer { loading = false }
         do {
-            _ = try await api.updateWorkOrder(token: token, id: id, request: request)
+            let updated = try await api.updateWorkOrder(token: token, id: id, request: request)
             orders = try await api.listWorkOrders(token: token)
             errorMessage = nil
-            return true
+            return updated
         } catch {
             errorMessage = userMessage(from: error)
-            return false
+            return nil
         }
     }
 

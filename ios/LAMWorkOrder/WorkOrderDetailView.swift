@@ -1,14 +1,9 @@
 import SwiftUI
 import UIKit
 
-private enum WorkOrderSendDestination {
-    case share
-    case text(String)
-    case email([String])
-}
-
 struct WorkOrderDetailView: View {
     @EnvironmentObject private var app: AppState
+    @Environment(\.dismiss) private var dismiss
 
     private let initialOrder: WorkOrder
     @State private var storeNumber: Int
@@ -25,6 +20,8 @@ struct WorkOrderDetailView: View {
     @State private var vendorEmail = ""
     @State private var preparingSend = false
     @State private var sendPayload: WorkOrderSendPayload?
+    @State private var assignmentSendRequest: AssignmentSendRequest?
+    @State private var closeAfterSendSheet = false
 
     init(order: WorkOrder) {
         initialOrder = order
@@ -264,23 +261,7 @@ struct WorkOrderDetailView: View {
 
             Section {
                 Button {
-                    Task {
-                        _ = await app.updateWorkOrder(
-                            id: order.id,
-                            request: UpdateWorkOrder(
-                                storeNumber: storeNumber,
-                                title: title.trimmed,
-                                description: description.trimmed,
-                                requestedBy: requestedBy.trimmed,
-                                location: location.trimmed,
-                                priority: priority,
-                                assignedTo: assignedTo.trimmed.nilIfBlank,
-                                dueAt: order.dueAt,
-                                status: status,
-                                statusNote: statusNote.trimmed.nilIfBlank
-                            )
-                        )
-                    }
+                    saveChanges()
                 } label: {
                     Label("Save Changes", systemImage: "checkmark.circle")
                         .frame(maxWidth: .infinity)
@@ -295,8 +276,44 @@ struct WorkOrderDetailView: View {
                 selectedMedia.append(media)
             }
         }
-        .sheet(item: $sendPayload) { payload in
+        .sheet(item: $sendPayload, onDismiss: handleSendSheetDismiss) { payload in
             sendSheet(for: payload)
+        }
+        .confirmationDialog(
+            "Send work order?",
+            isPresented: Binding(
+                get: { assignmentSendRequest != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        assignmentSendRequest = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let request = assignmentSendRequest {
+                Button("Text") {
+                    if let phone = assignmentPhone(for: request) {
+                        startAssignmentSend(request, destination: .text(phone))
+                    }
+                }
+                .disabled(assignmentPhone(for: request) == nil || canTextWorkOrder() == false)
+
+                Button("Email") {
+                    if let email = assignmentEmail(for: request) {
+                        startAssignmentSend(request, destination: .email([email]))
+                    }
+                }
+                .disabled(assignmentEmail(for: request) == nil || canEmailWorkOrder() == false)
+            }
+
+            Button("Skip", role: .cancel) {
+                finishAssignmentSendPrompt()
+            }
+        } message: {
+            if let request = assignmentSendRequest {
+                Text(workOrderAssignmentPromptMessage(for: request, contacts: contacts))
+            }
         }
         .onAppear {
             Task {
@@ -348,60 +365,102 @@ struct WorkOrderDetailView: View {
         }
     }
 
-    private func startSend(_ destination: WorkOrderSendDestination) {
+    private func saveChanges() {
+        let selectedAssignee = assignedTo.trimmed
+        let shouldNotify = selectedAssignee.isEmpty == false && selectedAssignee != (order.assignedTo ?? "")
+        let request = UpdateWorkOrder(
+            storeNumber: storeNumber,
+            title: title.trimmed,
+            description: description.trimmed,
+            requestedBy: requestedBy.trimmed,
+            location: location.trimmed,
+            priority: priority,
+            assignedTo: selectedAssignee.nilIfBlank,
+            dueAt: order.dueAt,
+            status: status,
+            statusNote: statusNote.trimmed.nilIfBlank
+        )
+
+        Task {
+            guard let updated = await app.updateWorkOrder(id: order.id, request: request) else { return }
+            if shouldNotify {
+                assignmentSendRequest = AssignmentSendRequest(
+                    order: updated,
+                    title: request.title,
+                    description: request.description,
+                    requestedBy: request.requestedBy,
+                    location: request.location,
+                    priority: request.priority,
+                    assignedTo: selectedAssignee,
+                    status: request.status,
+                    statusNote: request.statusNote
+                )
+            } else {
+                dismiss()
+            }
+        }
+    }
+
+    private func startSend(
+        _ destination: WorkOrderSendDestination,
+        subject: String? = nil,
+        message: String? = nil,
+        attachments: [Attachment]? = nil,
+        closeAfterSend: Bool = false
+    ) {
         guard preparingSend == false else { return }
 
-        let subject = shareSubject
-        let message = shareMessage
-        let attachments = order.attachments
+        let sendSubject = subject ?? shareSubject
+        let sendMessage = message ?? shareMessage
+        let sendAttachments = attachments ?? order.attachments
 
         preparingSend = true
         Task { @MainActor in
             defer { preparingSend = false }
+            if let payload = await prepareWorkOrderSendPayload(
+                app: app,
+                destination: destination,
+                subject: sendSubject,
+                message: sendMessage,
+                attachments: sendAttachments
+            ) {
+                closeAfterSendSheet = closeAfterSend
+                sendPayload = payload
+            }
+        }
+    }
 
-            switch destination {
-            case .text:
-                guard canTextWorkOrder() else {
-                    app.errorMessage = "Text messages are not available on this device."
-                    return
-                }
-            case .email:
-                guard canEmailWorkOrder() else {
-                    app.errorMessage = "Email is not available on this device."
-                    return
-                }
-            case .share:
-                break
-            }
+    private func startAssignmentSend(
+        _ request: AssignmentSendRequest,
+        destination: WorkOrderSendDestination
+    ) {
+        assignmentSendRequest = nil
+        startSend(
+            destination,
+            subject: workOrderAssignmentSubject(for: request),
+            message: workOrderAssignmentMessage(for: request),
+            attachments: request.order.attachments,
+            closeAfterSend: true
+        )
+    }
 
-            let preparation = await prepareWorkOrderAttachments(app: app, attachments: attachments)
-            if attachments.isEmpty == false && preparation.attachments.isEmpty {
-                app.errorMessage = "Unable to attach pictures or videos."
-                return
-            }
-            if preparation.failedCount > 0 {
-                app.errorMessage = "Some attachments could not be added."
-            }
+    private func assignmentPhone(for request: AssignmentSendRequest) -> String? {
+        textNumber(for: findWorkOrderContact(in: contacts, name: request.assignedTo))
+    }
 
-            switch destination {
-            case .share:
-                sendPayload = WorkOrderSendPayload(
-                    kind: .share(subject: subject, message: message, attachments: preparation.attachments)
-                )
-            case .text(let phone):
-                sendPayload = WorkOrderSendPayload(
-                    kind: .text(recipient: phone, message: message, attachments: preparation.attachments)
-                )
-            case .email(let recipients):
-                sendPayload = WorkOrderSendPayload(
-                    kind: .email(
-                        recipients: recipients,
-                        subject: subject,
-                        message: message,
-                        attachments: preparation.attachments
-                    )
-                )
-            }
+    private func assignmentEmail(for request: AssignmentSendRequest) -> String? {
+        emailAddress(for: findWorkOrderContact(in: contacts, name: request.assignedTo))
+    }
+
+    private func finishAssignmentSendPrompt() {
+        assignmentSendRequest = nil
+        dismiss()
+    }
+
+    private func handleSendSheetDismiss() {
+        if closeAfterSendSheet {
+            closeAfterSendSheet = false
+            dismiss()
         }
     }
 }

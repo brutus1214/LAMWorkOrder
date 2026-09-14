@@ -18,6 +18,12 @@ struct WorkOrderAttachmentPreparation {
     let failedCount: Int
 }
 
+enum WorkOrderSendDestination {
+    case share
+    case text(String)
+    case email([String])
+}
+
 struct WorkOrderSendPayload: Identifiable {
     let id = UUID()
     let kind: WorkOrderSendKind
@@ -27,6 +33,19 @@ enum WorkOrderSendKind {
     case share(subject: String, message: String, attachments: [WorkOrderPreparedAttachment])
     case text(recipient: String, message: String, attachments: [WorkOrderPreparedAttachment])
     case email(recipients: [String], subject: String, message: String, attachments: [WorkOrderPreparedAttachment])
+}
+
+struct AssignmentSendRequest: Identifiable {
+    let id = UUID()
+    let order: WorkOrder
+    let title: String
+    let description: String
+    let requestedBy: String
+    let location: String
+    let priority: String
+    let assignedTo: String
+    let status: String
+    let statusNote: String?
 }
 
 func workOrderShareSubject(for order: WorkOrder) -> String {
@@ -67,6 +86,53 @@ func workOrderShareText(
     return lines.joined(separator: "\n")
 }
 
+func workOrderAssignmentSubject(for request: AssignmentSendRequest) -> String {
+    "Assigned: \(request.order.workOrderNumber)"
+}
+
+func workOrderAssignmentMessage(for request: AssignmentSendRequest) -> String {
+    "Assigned to: \(request.assignedTo)\n\n" + workOrderShareText(
+        for: request.order,
+        storeNumber: request.order.storeNumber,
+        title: request.title,
+        description: request.description,
+        requestedBy: request.requestedBy,
+        location: request.location,
+        priority: request.priority,
+        assignedTo: request.assignedTo,
+        status: request.status,
+        statusNote: request.statusNote?.trimmed.nilIfBlank
+    )
+}
+
+func workOrderAssignmentPromptMessage(
+    for request: AssignmentSendRequest,
+    contacts: [User]
+) -> String {
+    let assignee = findWorkOrderContact(in: contacts, name: request.assignedTo)
+    var lines = [
+        "Work order saved. Send the details to \(request.assignedTo)?",
+        workOrderAttachmentSummary(count: request.order.attachments.count)
+    ]
+
+    if emailAddress(for: assignee) == nil && textNumber(for: assignee) == nil {
+        lines.append("No email or phone number is saved for this assignee.")
+    }
+
+    return lines.joined(separator: "\n")
+}
+
+func workOrderAttachmentSummary(count: Int) -> String {
+    switch count {
+    case 0:
+        return "No pictures or videos are attached."
+    case 1:
+        return "1 picture or video is attached."
+    default:
+        return "\(count) pictures or videos are attached."
+    }
+}
+
 func findWorkOrderContact(in users: [User], name: String?) -> User? {
     let normalizedName = name.normalizedContactName
     guard normalizedName.isEmpty == false else { return nil }
@@ -102,6 +168,59 @@ func canTextWorkOrder() -> Bool {
 
 func canEmailWorkOrder() -> Bool {
     MFMailComposeViewController.canSendMail()
+}
+
+@MainActor
+func prepareWorkOrderSendPayload(
+    app: AppState,
+    destination: WorkOrderSendDestination,
+    subject: String,
+    message: String,
+    attachments: [Attachment]
+) async -> WorkOrderSendPayload? {
+    switch destination {
+    case .text:
+        guard canTextWorkOrder() else {
+            app.errorMessage = "Text messages are not available on this device."
+            return nil
+        }
+    case .email:
+        guard canEmailWorkOrder() else {
+            app.errorMessage = "Email is not available on this device."
+            return nil
+        }
+    case .share:
+        break
+    }
+
+    let preparation = await prepareWorkOrderAttachments(app: app, attachments: attachments)
+    if attachments.isEmpty == false && preparation.attachments.isEmpty {
+        app.errorMessage = "Unable to attach pictures or videos."
+        return nil
+    }
+    if preparation.failedCount > 0 {
+        app.errorMessage = "Some attachments could not be added."
+    }
+
+    switch destination {
+    case .share:
+        return WorkOrderSendPayload(
+            kind: .share(subject: subject, message: message, attachments: preparation.attachments)
+        )
+    case .text(let phone):
+        return WorkOrderSendPayload(
+            kind: .text(recipient: phone, message: message, attachments: preparation.attachments)
+        )
+    case .email(let recipients):
+        return WorkOrderSendPayload(
+            kind: .email(
+                recipients: recipients,
+                subject: subject,
+                message: message,
+                attachments: preparation.attachments
+            )
+        )
+    }
 }
 
 @MainActor
