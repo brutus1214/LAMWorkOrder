@@ -9,8 +9,16 @@ class WorkOrderRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def list(self, status: Status | None, priority: Priority | None, search: str | None):
+    def list(
+        self,
+        status: Status | None,
+        priority: Priority | None,
+        search: str | None,
+        store_number: int | None = None,
+    ):
         query = select(WorkOrder)
+        if store_number is not None:
+            query = query.where(WorkOrder.store_number == store_number)
         if status:
             query = query.where(WorkOrder.status == status.value)
         if priority:

@@ -54,9 +54,9 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert 'id="mobile-create-toggle"' in dashboard.text
     assert 'data-filter="Me"' in dashboard.text
     assert 'id="work-order-dialog"' in dashboard.text
-    assert "app.css?v=20260828-web-edit" in dashboard.text
-    assert "app.js?v=20260828-web-edit" in dashboard.text
-    assert '<span class="build-tag">20260828-web-edit</span>' in dashboard.text
+    assert "app.css?v=20260922-store-filter" in dashboard.text
+    assert "app.js?v=20260922-store-filter" in dashboard.text
+    assert '<span class="build-tag">20260922-store-filter</span>' in dashboard.text
     assert "@media (max-width: 700px)" in styles.text
     assert "table,\n  tbody,\n  tr,\n  td" in styles.text
     assert "flex-wrap: wrap" in styles.text
@@ -179,6 +179,44 @@ def test_create_list_filter_and_update(client):
     assert updated.status_code == 200
     assert updated.json()["status"] == "InProgress"
     assert updated.json()["statusNote"] == "Technician dispatched"
+
+
+def test_work_order_list_and_detail_are_scoped_to_user_store_unless_all_stores(client):
+    store_one = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 1, "title": "Visibility Scope Store One"},
+    ).json()
+    store_three = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 3, "title": "Visibility Scope Store Three"},
+    ).json()
+    store_six = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 6, "title": "Visibility Scope Store Six"},
+    ).json()
+
+    employee = auth_headers(client, "employee")
+    manager = auth_headers(client, "manager")
+
+    employee_list = client.get(
+        "/api/work-orders", params={"search": "Visibility Scope"}, headers=employee
+    )
+    manager_list = client.get(
+        "/api/work-orders", params={"search": "Visibility Scope"}, headers=manager
+    )
+    all_store_list = client.get("/api/work-orders", params={"search": "Visibility Scope"})
+
+    assert employee_list.status_code == 200
+    assert {item["id"] for item in employee_list.json()} == {store_one["id"]}
+    assert {item["id"] for item in manager_list.json()} == {store_three["id"]}
+    assert {item["id"] for item in all_store_list.json()} == {
+        store_one["id"],
+        store_three["id"],
+        store_six["id"],
+    }
+
+    assert client.get(f"/api/work-orders/{store_three['id']}", headers=employee).status_code == 403
+    assert client.get(f"/api/work-orders/{store_one['id']}", headers=employee).status_code == 200
 
 
 def test_role_scoped_work_order_updates(client, tmp_path, monkeypatch):

@@ -13,9 +13,15 @@ class WorkOrderFiltersTest {
     @Test
     fun allFilterOnlyShowsWorkOrdersNewerThanThirtyDays() {
         val recent = workOrder("recent", "WO-3-2026-0001", "2026-08-01T12:00:00Z")
+        val completed = workOrder(
+            id = "completed",
+            number = "WO-3-2026-0003",
+            createdAt = "2026-08-01T12:00:00Z",
+            status = "Completed",
+        )
         val older = workOrder("older", "WO-3-2026-0002", "2026-07-01T12:00:00Z")
 
-        val visible = visibleWorkOrders(listOf(recent, older), "All", now)
+        val visible = visibleWorkOrders(listOf(recent, completed, older), "All", now)
 
         assertEquals(listOf("recent"), visible.map { it.id })
     }
@@ -48,6 +54,13 @@ class WorkOrderFiltersTest {
             createdAt = "2026-08-01T12:00:00Z",
             assignedTo = "James Chang - All Stores",
         )
+        val completedByMe = workOrder(
+            id = "completed",
+            number = "WO-3-2026-0004",
+            createdAt = "2026-08-01T12:00:00Z",
+            status = "Completed",
+            requestedBy = "James Chang",
+        )
         val other = workOrder(
             id = "other",
             number = "WO-3-2026-0003",
@@ -57,7 +70,7 @@ class WorkOrderFiltersTest {
         )
 
         val visible = visibleWorkOrders(
-            listOf(requestedByMe, assignedToMe, other),
+            listOf(requestedByMe, assignedToMe, completedByMe, other),
             "Me",
             now,
             currentUser = user("jc", "James Chang", 99),

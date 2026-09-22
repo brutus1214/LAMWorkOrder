@@ -17,9 +17,9 @@ func visibleWorkOrders(_ orders: [WorkOrder], filter: WorkOrderFilter, currentUs
         .filter { order in
             switch filter {
             case .me:
-                return order.hasUserName(currentUser)
+                return !order.isCompleted && order.hasUserName(currentUser)
             case .all:
-                return order.createdDate.map { $0 > cutoff } ?? true
+                return !order.isCompleted && (order.createdDate.map { $0 > cutoff } ?? true)
             case .new:
                 return order.status == WorkOrderStatus.new.rawValue
             case .open:
@@ -71,6 +71,10 @@ private func statusRank(_ status: String) -> Int {
 private extension WorkOrder {
     var createdDate: Date? {
         parseDate(createdAt)
+    }
+
+    var isCompleted: Bool {
+        status == WorkOrderStatus.completed.rawValue
     }
 
     func hasUserName(_ user: User?) -> Bool {

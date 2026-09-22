@@ -12,12 +12,13 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 private const val ALL_WORK_ORDER_MAX_AGE_DAYS = 30L
+private const val COMPLETED_STATUS = "Completed"
 private val WORK_ORDER_DATE_FORMAT = DateTimeFormatter.ofPattern("M/d/yy", Locale.US)
 
 private val FILTER_GROUPS = mapOf(
     "New" to setOf("New"),
     "Open/In Progress" to setOf("Scheduled", "InProgress", "Blocked"),
-    "Completed" to setOf("Completed"),
+    "Completed" to setOf(COMPLETED_STATUS),
     "Closed/Cancelled" to setOf("Cancelled"),
 )
 
@@ -31,9 +32,10 @@ internal fun visibleWorkOrders(
     return orders
         .filter { order ->
             when (filter) {
-                "Me" -> order.hasUserName(currentUser)
-                "All" -> order.createdAfter(cutoff)
-                else -> FILTER_GROUPS[filter]?.contains(order.status) ?: order.createdAfter(cutoff)
+                "Me" -> !order.isCompleted() && order.hasUserName(currentUser)
+                "All" -> !order.isCompleted() && order.createdAfter(cutoff)
+                else -> FILTER_GROUPS[filter]?.contains(order.status)
+                    ?: (!order.isCompleted() && order.createdAfter(cutoff))
             }
         }
         .sortedWith(
@@ -63,6 +65,8 @@ private fun WorkOrder.createdAfter(cutoff: Instant): Boolean {
     val created = parseCreatedAt(createdAt) ?: return true
     return created.isAfter(cutoff)
 }
+
+private fun WorkOrder.isCompleted(): Boolean = status == COMPLETED_STATUS
 
 private fun WorkOrder.hasUserName(user: User?): Boolean {
     if (user == null) return false

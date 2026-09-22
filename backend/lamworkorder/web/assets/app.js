@@ -13,6 +13,7 @@ const priorities = ["Low", "Normal", "High", "Emergency"];
 const assignableRoleOrder = ["Admin", "Manager", "Employee", "Security", "Technician"];
 const employeeScopedRoles = ["Employee", "Security"];
 const allMaxAgeMs = 30 * 24 * 60 * 60 * 1000;
+const completedStatus = "Completed";
 
 let token = sessionStorage.getItem("lamworkorder.token");
 let user = null;
@@ -132,6 +133,8 @@ function signOut(callApi = true) {
   if (callApi && token) api("/api/auth/logout", { method: "POST" }).catch(() => {});
   token = null;
   user = null;
+  orders = [];
+  assignees = [];
   sessionStorage.removeItem("lamworkorder.token");
   closeWorkOrderDetail();
   setMobileIntakeOpen(false);
@@ -173,19 +176,23 @@ function isRecentWorkOrder(order, now = Date.now()) {
   return Number.isNaN(created) || created > now - allMaxAgeMs;
 }
 
+function isCompletedWorkOrder(order) {
+  return order.status === completedStatus;
+}
+
 function visibleOrders() {
   const groups = {
     New: ["New"],
     Open: ["Scheduled", "InProgress", "Blocked"],
-    Completed: ["Completed"],
+    Completed: [completedStatus],
     Closed: ["Cancelled"],
   };
   return orders
     .filter((order) =>
       filter === "Me"
-        ? matchesCurrentUser(order)
+        ? !isCompletedWorkOrder(order) && matchesCurrentUser(order)
         : filter === "All"
-          ? isRecentWorkOrder(order)
+          ? !isCompletedWorkOrder(order) && isRecentWorkOrder(order)
           : groups[filter].includes(order.status),
     )
     .sort(

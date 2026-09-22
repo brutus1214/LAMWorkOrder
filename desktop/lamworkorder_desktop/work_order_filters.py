@@ -1,11 +1,12 @@
 from datetime import UTC, datetime, timedelta
 
 ALL_WORK_ORDER_MAX_AGE = timedelta(days=30)
+COMPLETED_STATUS = "Completed"
 
 GROUPS = {
     "New": {"New"},
     "Open/In Progress": {"Scheduled", "InProgress", "Blocked"},
-    "Completed": {"Completed"},
+    "Completed": {COMPLETED_STATUS},
     "Closed/Cancelled": {"Cancelled"},
 }
 
@@ -19,7 +20,11 @@ def filter_work_orders(
     selected_statuses = GROUPS.get(selected_filter)
     if selected_statuses is not None:
         return [order for order in orders if order["status"] in selected_statuses]
-    return [order for order in orders if _is_recent_work_order(order, now)]
+    return [
+        order
+        for order in orders
+        if order.get("status") != COMPLETED_STATUS and _is_recent_work_order(order, now)
+    ]
 
 
 def _is_recent_work_order(order: dict, now: datetime) -> bool:

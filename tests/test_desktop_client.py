@@ -50,6 +50,7 @@ def test_all_filter_only_shows_recent_work_orders():
     now = datetime(2026, 8, 18, 12, tzinfo=UTC)
     orders = [
         work_order("recent", "New", "2026-08-01T12:00:00Z"),
+        work_order("completed", "Completed", "2026-08-01T12:00:00Z"),
         work_order("older", "New", "2026-07-01T12:00:00Z"),
     ]
 

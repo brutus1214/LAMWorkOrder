@@ -66,6 +66,16 @@ def require_work_order_store(user: User, item, action: str = "modify") -> None:
         )
 
 
+def readable_store_number(user: User) -> int | None:
+    return None if user.store_number == 99 else user.store_number
+
+
+def require_work_order_read(user: User, item) -> None:
+    if readable_store_number(user) is None or user.store_number == item.store_number:
+        return
+    raise HTTPException(status_code=403, detail="You can only view work orders for your store")
+
+
 def normalized_identity(value: str | None) -> str:
     return " ".join((value or "").strip().casefold().split())
 
@@ -317,18 +327,20 @@ def list_work_orders(
     priority: Priority | None = None,
     search: str | None = None,
     repo: WorkOrderRepository = Depends(repository),
-    _: User = Depends(current_user),
+    user: User = Depends(current_user),
 ):
-    return repo.list(work_order_status, priority, search)
+    return repo.list(work_order_status, priority, search, readable_store_number(user))
 
 
 @router.get("/api/work-orders/{work_order_id}", response_model=WorkOrderRead, tags=["work orders"])
 def get_work_order(
     work_order_id: UUID,
     repo: WorkOrderRepository = Depends(repository),
-    _: User = Depends(current_user),
+    user: User = Depends(current_user),
 ):
-    return find_order(work_order_id, repo)
+    item = find_order(work_order_id, repo)
+    require_work_order_read(user, item)
+    return item
 
 
 @router.delete("/api/work-orders/{work_order_id}", status_code=204, tags=["work orders"])
@@ -434,11 +446,12 @@ async def upload_attachments(
 
 @router.get("/api/attachments/{attachment_id}/content", tags=["attachments"])
 def attachment_content(
-    attachment_id: UUID, session: Session = Depends(get_session), _: User = Depends(current_user)
+    attachment_id: UUID, session: Session = Depends(get_session), user: User = Depends(current_user)
 ):
     attachment = session.get(Attachment, str(attachment_id))
     if not attachment or not (UPLOADS / attachment.stored_name).is_file():
         raise HTTPException(status_code=404, detail="Attachment not found")
+    require_work_order_read(user, attachment.work_order)
     return FileResponse(
         UPLOADS / attachment.stored_name,
         media_type=attachment.content_type,

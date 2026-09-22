@@ -22,7 +22,7 @@ def client():
     Base.metadata.create_all(engine)
     with testing_session() as session:
         for username, role, store_number, email in [
-            ("admin", "Admin", 1, None),
+            ("admin", "Admin", 99, None),
             ("employee", "Employee", 1, "employee@example.com"),
             ("security", "Security", 1, "security@example.com"),
             ("technician", "Technician", 1, "technician@example.com"),
