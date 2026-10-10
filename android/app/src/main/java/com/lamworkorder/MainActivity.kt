@@ -516,7 +516,19 @@ private fun formatUsPhone(input: String): String {
         )
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Edit User", style = MaterialTheme.typography.headlineLarge); Text("@${user.username}")
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Edit User", style = MaterialTheme.typography.headlineLarge)
+                Text("@${user.username}")
+            }
+            TextButton({ confirmDelete = true }) {
+                Text("Delete User", color = MaterialTheme.colorScheme.error)
+            }
+        }
         OutlinedTextField(name,{name=it},label={Text("Full name")},modifier=Modifier.fillMaxWidth())
         StoreDropdown(store,{store=it},Modifier.fillMaxWidth())
         Box { OutlinedButton({roleOpen=true}){Text("Role: ${if(role=="Admin") "Administrator" else role}")}; DropdownMenu(roleOpen,{roleOpen=false}){roles.forEach{r->DropdownMenuItem({Text(if(r=="Admin") "Administrator" else r)},{role=r;roleOpen=false})}} }
@@ -524,9 +536,6 @@ private fun formatUsPhone(input: String): String {
         OutlinedTextField(phone,{incoming->val formatted=formatUsPhone(incoming.text);phone=TextFieldValue(formatted,selection=TextRange(formatted.length))},label={Text("Phone number for texting")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Phone),modifier=Modifier.fillMaxWidth())
         Row { Switch(active,{active=it}); Spacer(Modifier.width(8.dp)); Text(if(active) "Active — can sign in" else "Inactive — sign-in blocked") }
         Button({model.updateUser(user.id,UserAdminUpdate(name.trim(),store,role,email.ifBlank{null},phone.text.ifBlank{null},active),back)},enabled=name.isNotBlank()){Text("Save user")}
-        TextButton({ confirmDelete = true }) {
-            Text("Delete User", color = MaterialTheme.colorScheme.error)
-        }
         HorizontalDivider(); Text("Reset password",style=MaterialTheme.typography.titleMedium)
         OutlinedTextField(password,{password=it},label={Text("Temporary password (8+ characters)")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
         OutlinedButton({model.resetPassword(user.id,password){password=""}},enabled=password.length>=8){Text("Reset password")}

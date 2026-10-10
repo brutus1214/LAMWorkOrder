@@ -133,12 +133,6 @@ struct UserEditView: View {
                     Label("Save User", systemImage: "checkmark.circle")
                 }
                 .disabled(displayName.trimmed.isEmpty)
-
-                Button(role: .destructive) {
-                    confirmingDelete = true
-                } label: {
-                    Label("Delete User", systemImage: "trash")
-                }
             }
 
             Section(header: Text("Password")) {
@@ -163,6 +157,15 @@ struct UserEditView: View {
         }
         .navigationTitle(user.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("Delete", role: .destructive) {
+                    confirmingDelete = true
+                }
+                .disabled(app.loading)
+                .accessibilityLabel("Delete User")
+            }
+        }
         .alert("Delete User?", isPresented: $confirmingDelete) {
             Button("Cancel", role: .cancel) {}
             Button("Delete User", role: .destructive) {
