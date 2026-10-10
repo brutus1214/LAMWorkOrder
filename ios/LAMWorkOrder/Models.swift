@@ -68,7 +68,7 @@ struct User: Codable, Identifiable, Hashable {
     }
 
     var canManageUsers: Bool {
-        role == Role.admin.rawValue || role == Role.manager.rawValue
+        role == Role.admin.rawValue
     }
 }
 

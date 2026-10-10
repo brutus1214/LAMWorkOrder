@@ -74,7 +74,7 @@ struct LoginView: View {
 
     private var createAccountFields: some View {
         Group {
-            Text("New accounts start as Requester. A manager can change the role later.")
+            Text("New accounts start as Requester. An admin can change the role later.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 

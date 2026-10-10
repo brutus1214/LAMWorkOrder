@@ -67,6 +67,10 @@ final class APIClient {
         )
     }
 
+    func deleteUser(token: String, id: String) async throws {
+        try await sendNoContent("api/users/\(id)", method: "DELETE", token: token)
+    }
+
     func listWorkOrders(token: String, search: String? = nil) async throws -> [WorkOrder] {
         let query = search.flatMap { value -> [URLQueryItem]? in
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)

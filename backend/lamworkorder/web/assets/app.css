@@ -175,6 +175,10 @@ h1 {
   color: #142438;
 }
 
+.menu button.danger {
+  color: #a1261c;
+}
+
 .menu button:hover {
   background: #edf2f6;
 }

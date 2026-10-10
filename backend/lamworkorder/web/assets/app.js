@@ -118,7 +118,7 @@ function showApp() {
   setViewHidden("app-view", false);
   $("account-name").textContent = `${user.displayName} - ${user.role}`;
   $("requested-by").value = user.displayName;
-  $("manage-users").hidden = !["Admin", "Manager"].includes(user.role);
+  $("manage-users").hidden = user.role !== "Admin";
   const stores =
     user.role === "Admin" ? Array.from({ length: 50 }, (_, index) => index + 1) : [user.storeNumber];
   $("store").innerHTML = stores
@@ -611,23 +611,36 @@ $("profile-form").addEventListener("submit", async (event) => {
   }
 });
 
-$("delete-account-button").onclick = async () => {
+$("menu-delete-account-button").onclick = () => {
+  $("account-menu").hidden = true;
+  deleteCurrentAccount();
+};
+
+$("delete-account-button").onclick = deleteCurrentAccount;
+
+async function deleteCurrentAccount() {
   if (!confirm("Delete your account? Your profile information will be removed and you will be signed out. Existing work orders stay in the operations history.")) {
     return;
   }
-  const button = $("delete-account-button");
-  button.disabled = true;
+  const buttons = [$("delete-account-button"), $("menu-delete-account-button")];
+  buttons.forEach((button) => {
+    button.disabled = true;
+  });
+  const profileDialogOpen = $("profile-dialog").open;
   $("profile-error").textContent = "";
   try {
     await api("/api/profile", { method: "DELETE" });
-    $("profile-dialog").close();
+    if (profileDialogOpen) $("profile-dialog").close();
     signOut(false);
   } catch (error) {
-    $("profile-error").textContent = error.message;
+    if (profileDialogOpen) $("profile-error").textContent = error.message;
+    else alert(error.message);
   } finally {
-    button.disabled = false;
+    buttons.forEach((button) => {
+      button.disabled = false;
+    });
   }
-};
+}
 
 (async () => {
   if (!token) return;

@@ -8,6 +8,7 @@ struct WorkOrderHomeView: View {
     @State private var showingCreate = false
     @State private var showingProfile = false
     @State private var showingUsers = false
+    @State private var confirmingDeleteAccount = false
 
     private var visibleOrders: [WorkOrder] {
         visibleWorkOrders(app.orders, filter: filter, currentUser: app.user)
@@ -46,6 +47,11 @@ struct WorkOrderHomeView: View {
                             Label("Profile", systemImage: "person.crop.circle")
                         }
                         Button(role: .destructive) {
+                            confirmingDeleteAccount = true
+                        } label: {
+                            Label("Delete Account", systemImage: "trash")
+                        }
+                        Button(role: .destructive) {
                             app.logout()
                         } label: {
                             Label("Logout", systemImage: "rectangle.portrait.and.arrow.right")
@@ -67,6 +73,16 @@ struct WorkOrderHomeView: View {
             }
             .sheet(isPresented: $showingUsers) {
                 ManageUsersView()
+            }
+            .alert("Delete Account?", isPresented: $confirmingDeleteAccount) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete Account", role: .destructive) {
+                    Task {
+                        _ = await app.deleteAccount()
+                    }
+                }
+            } message: {
+                Text("This removes your profile information and signs you out. Existing work orders stay in the operations history.")
             }
             .onAppear {
                 Task {

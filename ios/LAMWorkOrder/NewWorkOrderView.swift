@@ -181,7 +181,7 @@ struct NewWorkOrderView: View {
                 if app.assignees.isEmpty {
                     await app.loadAssignees()
                 }
-                if app.user?.role == Role.admin.rawValue || app.user?.role == Role.manager.rawValue {
+                if app.user?.role == Role.admin.rawValue {
                     if app.users.isEmpty {
                         await app.loadUsers()
                     }

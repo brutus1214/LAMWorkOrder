@@ -168,7 +168,7 @@ private data class AssignmentSendRequest(
         Text("LA MART OPERATIONS", color = Color(0xFF0D8278), fontWeight = FontWeight.Bold)
         Text(if (createMode) "Create new user" else "Sign in", style = MaterialTheme.typography.headlineLarge)
         if (createMode) {
-            Text("New accounts start as Requester. A manager can change the role later.")
+            Text("New accounts start as Requester. An admin can change the role later.")
             OutlinedTextField(
                 value = name,
                 onValueChange = { name = it },
@@ -380,8 +380,31 @@ private fun formatUsPhone(input: String): String {
     var filter by remember { mutableStateOf("New") }
     var menuOpen by remember { mutableStateOf(false) }
     var intakeOpen by remember { mutableStateOf(false) }
+    var confirmDeleteAccount by remember { mutableStateOf(false) }
     LaunchedEffect(currentUser.id) {
         if (state.assignees.isEmpty()) model.loadAssignees()
+    }
+    if (confirmDeleteAccount) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteAccount = false },
+            title = { Text("Delete Account?") },
+            text = {
+                Text("This removes your profile information and signs you out. Existing work orders stay in the operations history.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDeleteAccount = false
+                        model.deleteAccount()
+                    },
+                ) {
+                    Text("Delete Account", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton({ confirmDeleteAccount = false }) { Text("Cancel") }
+            },
+        )
     }
     if (intakeOpen) {
         BackHandler { intakeOpen = false }
@@ -399,15 +422,13 @@ private fun formatUsPhone(input: String): String {
             Box {
                 IconButton({ menuOpen = true }) { Text("\u22EE", style = MaterialTheme.typography.headlineMedium) }
                 DropdownMenu(menuOpen, { menuOpen = false }) {
-                    if(currentUser.role in listOf("Admin","Manager")) DropdownMenuItem({ Text("Manage Users") }, { menuOpen=false; showUsers() })
+                    if(currentUser.role == "Admin") DropdownMenuItem({ Text("Manage Users") }, { menuOpen=false; showUsers() })
                     DropdownMenuItem({ Text("Profile") }, { menuOpen=false; showProfile() })
+                    DropdownMenuItem({ Text("Delete Account") }, { menuOpen=false; confirmDeleteAccount = true })
                     DropdownMenuItem({ Text("Logout") }, { menuOpen=false; model.logout() })
                 }
             }
         }
-        /* Previous expanded account actions:
-        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Column{Text("Work orders",style=MaterialTheme.typography.headlineLarge);Text("${currentUser.displayName} · ${if(currentUser.role=="Admin") "Administrator" else currentUser.role}")};Column{if(currentUser.role in listOf("Admin","Manager")) TextButton(showUsers){Text("Manage Users")};TextButton(showProfile){Text("Profile")};TextButton(model::logout){Text("Logout")}}}
-        */
         Row{OutlinedTextField(search,{search=it},label={Text("Search")},modifier=Modifier.weight(1f));Button({model.refresh(search);model.loadAssignees()}){Text("Go")}}
         OutlinedButton({model.refresh(search);model.loadAssignees()}, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) { Text("Refresh") }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -472,7 +493,28 @@ private fun formatUsPhone(input: String): String {
     var role by remember { mutableStateOf(user.role) }; var email by remember { mutableStateOf(user.email.orEmpty()) }
     var phone by remember { mutableStateOf(TextFieldValue(user.phoneNumber.orEmpty())) }; var active by remember { mutableStateOf(user.isActive) }
     var password by remember { mutableStateOf("") }; var roleOpen by remember { mutableStateOf(false) }
-    val roles = if(actor.role=="Admin") listOf("Requester","Employee","Security","Technician","Manager","Admin") else listOf("Requester","Employee","Security","Technician")
+    var confirmDelete by remember { mutableStateOf(false) }
+    val roles = listOf("Requester","Employee","Security","Technician","Manager","Admin")
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete User?") },
+            text = { Text("This removes ${user.displayName}'s profile information and blocks future sign-in. Existing work orders stay in the operations history.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        model.deleteUser(user.id, back)
+                    },
+                ) {
+                    Text("Delete User", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton({ confirmDelete = false }) { Text("Cancel") }
+            },
+        )
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Edit User", style = MaterialTheme.typography.headlineLarge); Text("@${user.username}")
         OutlinedTextField(name,{name=it},label={Text("Full name")},modifier=Modifier.fillMaxWidth())
@@ -482,6 +524,9 @@ private fun formatUsPhone(input: String): String {
         OutlinedTextField(phone,{incoming->val formatted=formatUsPhone(incoming.text);phone=TextFieldValue(formatted,selection=TextRange(formatted.length))},label={Text("Phone number for texting")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Phone),modifier=Modifier.fillMaxWidth())
         Row { Switch(active,{active=it}); Spacer(Modifier.width(8.dp)); Text(if(active) "Active — can sign in" else "Inactive — sign-in blocked") }
         Button({model.updateUser(user.id,UserAdminUpdate(name.trim(),store,role,email.ifBlank{null},phone.text.ifBlank{null},active),back)},enabled=name.isNotBlank()){Text("Save user")}
+        TextButton({ confirmDelete = true }) {
+            Text("Delete User", color = MaterialTheme.colorScheme.error)
+        }
         HorizontalDivider(); Text("Reset password",style=MaterialTheme.typography.titleMedium)
         OutlinedTextField(password,{password=it},label={Text("Temporary password (8+ characters)")},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
         OutlinedButton({model.resetPassword(user.id,password){password=""}},enabled=password.length>=8){Text("Reset password")}
@@ -572,7 +617,7 @@ private fun assigneeOptions(state: QueueState): List<User> =
         if (state.assignees.isEmpty()) {
             model.loadAssignees()
         }
-        if (user.role in listOf("Admin", "Manager") && state.users.isEmpty()) {
+        if (user.role == "Admin" && state.users.isEmpty()) {
             model.loadUsers()
         }
     }
@@ -1479,7 +1524,7 @@ private fun launchChooser(context: Context, intent: Intent, title: String) {
     }
     LaunchedEffect(Unit) {
         if (state.assignees.isEmpty()) model.loadAssignees()
-        if (user.role in listOf("Admin", "Manager") && state.users.isEmpty()) model.loadUsers()
+        if (user.role == "Admin" && state.users.isEmpty()) model.loadUsers()
     }
     fun uriToPart(uri: Uri): MultipartBody.Part? = context.contentResolver.openInputStream(uri)?.use { input ->
         val bytes = input.readBytes()

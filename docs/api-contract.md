@@ -23,6 +23,10 @@ Authentication uses `Authorization: Bearer <token>` for all `/api` resources exc
 - `GET /api/profile`
 - `PATCH /api/profile`
 - `DELETE /api/profile` (deactivates and anonymizes the signed-in account)
+- `GET /api/users` (Admin only)
+- `PATCH /api/users/{id}` (Admin only; can deactivate users with `isActive=false`)
+- `POST /api/users/{id}/reset-password` (Admin only)
+- `DELETE /api/users/{id}` (Admin only; deactivates and anonymizes the target account)
 
 Roles are `Requester`, `Employee`, `Security`, `Technician`, `Manager`, and `Admin`. Fresh installations seed one account per role with the temporary password `ChangeMe123!`; deployments should change these credentials before use. Existing SQLite work-order records are retained by additive startup migrations.
 

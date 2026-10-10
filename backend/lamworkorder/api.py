@@ -211,9 +211,8 @@ def update_profile(
     return user
 
 
-@router.delete("/api/profile", status_code=204, tags=["profile"])
-def delete_profile(user: User = Depends(current_user), session: Session = Depends(get_session)):
-    if user.role == "Admin":
+def delete_user_account(target: User, session: Session) -> None:
+    if target.role == "Admin" and target.is_active:
         active_admins = session.scalar(
             select(func.count())
             .select_from(User)
@@ -225,11 +224,11 @@ def delete_profile(user: User = Depends(current_user), session: Session = Depend
                 detail="You cannot delete the only active Administrator account",
             )
 
-    assignee_labels = user_assignee_labels(user)
-    display_name = normalized_identity(user.display_name)
+    assignee_labels = user_assignee_labels(target)
+    display_name = normalized_identity(target.display_name)
     deleted_label = "Deleted Account"
 
-    for item in session.scalars(select(WorkOrder).where(WorkOrder.created_by_id == user.id)):
+    for item in session.scalars(select(WorkOrder).where(WorkOrder.created_by_id == target.id)):
         item.created_by_id = None
         item.requested_by = deleted_label
 
@@ -238,33 +237,34 @@ def delete_profile(user: User = Depends(current_user), session: Session = Depend
         if assigned_to in assignee_labels or without_store_label(assigned_to) == display_name:
             item.assigned_to = None
 
-    user.username = f"deleted-{user.id}"
-    user.password_hash = hash_password(uuid4().hex)
-    user.display_name = deleted_label
-    user.email = None
-    user.phone_number = None
-    user.is_active = 0
-    session.execute(delete(SessionToken).where(SessionToken.user_id == user.id))
+    target.username = f"deleted-{target.id}"
+    target.password_hash = hash_password(uuid4().hex)
+    target.display_name = deleted_label
+    target.email = None
+    target.phone_number = None
+    target.is_active = 0
+    session.execute(delete(SessionToken).where(SessionToken.user_id == target.id))
     session.commit()
 
 
-def _managed_user(user_id: UUID, actor: User, session: Session) -> User:
+@router.delete("/api/profile", status_code=204, tags=["profile"])
+def delete_profile(user: User = Depends(current_user), session: Session = Depends(get_session)):
+    delete_user_account(user, session)
+
+
+def _managed_user(user_id: UUID, session: Session) -> User:
     target = session.get(User, str(user_id))
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    if actor.role == "Manager" and (actor.store_number == 99 or target.store_number != actor.store_number):
-        raise HTTPException(status_code=403, detail="Managers can only manage users in their store")
     return target
 
 
 @router.get("/api/users", response_model=list[UserRead], tags=["user management"])
 def list_users(
-    actor: User = Depends(require_roles("Admin", "Manager")),
+    _: User = Depends(require_roles("Admin")),
     session: Session = Depends(get_session),
 ):
-    statement = select(User).order_by(User.display_name)
-    if actor.role == "Manager":
-        statement = statement.where(User.store_number == actor.store_number)
+    statement = select(User).where(~User.username.like("deleted-%")).order_by(User.display_name)
     return list(session.scalars(statement))
 
 
@@ -326,12 +326,10 @@ def list_work_order_notification_recipients(
 def update_user(
     user_id: UUID,
     request: UserAdminUpdate,
-    actor: User = Depends(require_roles("Admin", "Manager")),
+    actor: User = Depends(require_roles("Admin")),
     session: Session = Depends(get_session),
 ):
-    target = _managed_user(user_id, actor, session)
-    if actor.role == "Manager" and (request.role in {"Admin", "Manager"} or request.store_number == 99):
-        raise HTTPException(status_code=403, detail="Only an Administrator can assign this role or All Stores")
+    target = _managed_user(user_id, session)
     if target.id == actor.id and (not request.is_active or request.role != actor.role):
         raise HTTPException(status_code=400, detail="You cannot deactivate or demote your own account")
     target.display_name = request.display_name.strip()
@@ -349,13 +347,22 @@ def update_user(
 def reset_user_password(
     user_id: UUID,
     request: PasswordReset,
-    actor: User = Depends(require_roles("Admin", "Manager")),
+    _: User = Depends(require_roles("Admin")),
     session: Session = Depends(get_session),
 ):
-    target = _managed_user(user_id, actor, session)
+    target = _managed_user(user_id, session)
     target.password_hash = hash_password(request.new_password)
     session.execute(delete(SessionToken).where(SessionToken.user_id == target.id))
     session.commit()
+
+
+@router.delete("/api/users/{user_id}", status_code=204, tags=["user management"])
+def delete_user(
+    user_id: UUID,
+    _: User = Depends(require_roles("Admin")),
+    session: Session = Depends(get_session),
+):
+    delete_user_account(_managed_user(user_id, session), session)
 
 
 @router.get("/api/work-orders", response_model=list[WorkOrderRead], tags=["work orders"])

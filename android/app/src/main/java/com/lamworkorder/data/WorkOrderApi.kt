@@ -32,6 +32,7 @@ interface WorkOrderApi {
     @GET("api/work-order-notification-recipients") suspend fun notificationRecipients(@Header("Authorization") auth: String, @Query("storeNumber") storeNumber: Int): List<User>
     @PATCH("api/users/{id}") suspend fun updateUser(@Header("Authorization") auth: String, @Path("id") id: String, @Body request: UserAdminUpdate): User
     @POST("api/users/{id}/reset-password") suspend fun resetPassword(@Header("Authorization") auth: String, @Path("id") id: String, @Body request: PasswordReset)
+    @DELETE("api/users/{id}") suspend fun deleteUser(@Header("Authorization") auth: String, @Path("id") id: String): Response<Unit>
 
     @GET("api/work-orders")
     suspend fun list(

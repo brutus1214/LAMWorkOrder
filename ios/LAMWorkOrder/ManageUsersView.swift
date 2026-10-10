@@ -6,23 +6,34 @@ struct ManageUsersView: View {
 
     var body: some View {
         NavigationView {
-            List(app.users) { user in
-                NavigationLink(destination:
-                    UserEditView(user: user)
-                ) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(user.displayName)
-                            .font(.headline)
-                        Text("\(user.role) - \(user.storeLabel)")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        if user.isActive == false {
-                            Text("Inactive")
-                                .font(.caption.weight(.semibold))
-                                .foregroundColor(.red)
+            List {
+                if let error = app.errorMessage {
+                    Section {
+                        Text(error)
+                            .foregroundColor(.red)
+                    }
+                }
+
+                Section {
+                    ForEach(app.users) { user in
+                        NavigationLink(destination:
+                            UserEditView(user: user)
+                        ) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(user.displayName)
+                                    .font(.headline)
+                                Text("\(user.role) - \(user.storeLabel)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                if user.isActive == false {
+                                    Text("Inactive")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundColor(.red)
+                                }
+                            }
+                            .padding(.vertical, 4)
                         }
                     }
-                    .padding(.vertical, 4)
                 }
             }
             .navigationTitle("Manage Users")
@@ -53,6 +64,7 @@ struct ManageUsersView: View {
 
 struct UserEditView: View {
     @EnvironmentObject private var app: AppState
+    @Environment(\.dismiss) private var dismiss
 
     let user: User
     @State private var displayName: String
@@ -63,6 +75,7 @@ struct UserEditView: View {
     @State private var isActive: Bool
     @State private var newPassword = ""
     @State private var passwordReset = false
+    @State private var confirmingDelete = false
 
     init(user: User) {
         self.user = user
@@ -120,6 +133,12 @@ struct UserEditView: View {
                     Label("Save User", systemImage: "checkmark.circle")
                 }
                 .disabled(displayName.trimmed.isEmpty)
+
+                Button(role: .destructive) {
+                    confirmingDelete = true
+                } label: {
+                    Label("Delete User", systemImage: "trash")
+                }
             }
 
             Section(header: Text("Password")) {
@@ -144,5 +163,17 @@ struct UserEditView: View {
         }
         .navigationTitle(user.displayName)
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Delete User?", isPresented: $confirmingDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete User", role: .destructive) {
+                Task {
+                    if await app.deleteUser(id: user.id) {
+                        dismiss()
+                    }
+                }
+            }
+        } message: {
+            Text("This removes \(user.displayName)'s profile information and blocks future sign-in. Existing work orders stay in the operations history.")
+        }
     }
 }

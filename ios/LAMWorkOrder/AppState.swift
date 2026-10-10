@@ -237,6 +237,25 @@ final class AppState: ObservableObject {
         }
     }
 
+    func deleteUser(id: String) async -> Bool {
+        guard let token = token else { return false }
+        loading = true
+        defer { loading = false }
+        do {
+            try await api.deleteUser(token: token, id: id)
+            if user?.id == id {
+                clearSession()
+            } else {
+                users = try await api.users(token: token)
+                errorMessage = nil
+            }
+            return true
+        } catch {
+            errorMessage = userMessage(from: error)
+            return false
+        }
+    }
+
     func resetPassword(userID: String, password: String) async -> Bool {
         guard let token = token else { return false }
         loading = true
