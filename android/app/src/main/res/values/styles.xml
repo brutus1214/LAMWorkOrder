@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.LAMWorkOrder" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#0D8278</item>
+        <item name="android:navigationBarColor">#10253F</item>
+        <item name="android:statusBarColor">#10253F</item>
+    </style>
+</resources>
+
