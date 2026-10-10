@@ -75,6 +75,10 @@ final class AppState: ObservableObject {
     }
 
     func logout() {
+        clearSession()
+    }
+
+    private func clearSession() {
         token = nil
         user = nil
         orders = []
@@ -197,6 +201,20 @@ final class AppState: ObservableObject {
                 ProfileUpdate(displayName: displayName, email: email?.nilIfBlank)
             )
             errorMessage = nil
+            return true
+        } catch {
+            errorMessage = userMessage(from: error)
+            return false
+        }
+    }
+
+    func deleteAccount() async -> Bool {
+        guard let token = token else { return false }
+        loading = true
+        defer { loading = false }
+        do {
+            try await api.deleteAccount(token: token)
+            clearSession()
             return true
         } catch {
             errorMessage = userMessage(from: error)

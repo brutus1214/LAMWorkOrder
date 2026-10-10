@@ -34,6 +34,11 @@ class ApiClient:
             self.token = None
             self.user = None
 
+    def delete_account(self):
+        self._request("DELETE", "/api/profile")
+        self.token = None
+        self.user = None
+
     def update_profile(self, display_name: str, email: str | None):
         self.user = self._request(
             "PATCH", "/api/profile", json={"displayName": display_name, "email": email}

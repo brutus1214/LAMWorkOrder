@@ -25,6 +25,7 @@ interface WorkOrderApi {
     @POST("api/auth/register") suspend fun register(@Body request: RegistrationRequest): LoginResponse
     @GET("api/profile") suspend fun profile(@Header("Authorization") auth: String): User
     @PATCH("api/profile") suspend fun updateProfile(@Header("Authorization") auth: String, @Body request: ProfileUpdate): User
+    @DELETE("api/profile") suspend fun deleteAccount(@Header("Authorization") auth: String): Response<Unit>
     @GET("api/users") suspend fun users(@Header("Authorization") auth: String): List<User>
     @GET("api/technicians") suspend fun technicians(@Header("Authorization") auth: String): List<User>
     @GET("api/assignees") suspend fun assignees(@Header("Authorization") auth: String): List<User>

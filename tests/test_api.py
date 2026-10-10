@@ -54,9 +54,9 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert 'id="mobile-create-toggle"' in dashboard.text
     assert 'data-filter="Me"' in dashboard.text
     assert 'id="work-order-dialog"' in dashboard.text
-    assert "app.css?v=20260922-store-filter" in dashboard.text
-    assert "app.js?v=20260922-store-filter" in dashboard.text
-    assert '<span class="build-tag">20260922-store-filter</span>' in dashboard.text
+    assert "app.css?v=20261010-delete-account" in dashboard.text
+    assert "app.js?v=20261010-delete-account" in dashboard.text
+    assert '<span class="build-tag">20261010-delete-account</span>' in dashboard.text
     assert "@media (max-width: 700px)" in styles.text
     assert "table,\n  tbody,\n  tr,\n  td" in styles.text
     assert "flex-wrap: wrap" in styles.text
@@ -73,6 +73,8 @@ def test_dashboard_has_mobile_queue_layout_assets(client):
     assert "data-work-order-update" in script.text
     assert "Status note" in script.text
     assert "Save work order" in script.text
+    assert "Delete Account" in dashboard.text
+    assert 'api("/api/profile", { method: "DELETE" })' in script.text
     assert '"Admin", "Manager", "Employee", "Security", "Technician"' in script.text
 
 
@@ -101,6 +103,45 @@ def test_login_profile_and_permissions(client):
         headers=requester,
     )
     assert denied.status_code == 403
+
+
+def test_delete_profile_anonymizes_account_and_revokes_access(client):
+    requester = auth_headers(client, "requester")
+    profile = client.get("/api/profile", headers=requester).json()
+    created = client.post(
+        "/api/work-orders",
+        json={**PAYLOAD, "storeNumber": 1, "assignedTo": "Requester - LA Mart 1"},
+        headers=requester,
+    ).json()
+
+    deleted = client.delete("/api/profile", headers=requester)
+
+    assert deleted.status_code == 204
+    assert client.get("/api/profile", headers=requester).status_code == 401
+    relogin = client.post(
+        "/api/auth/login", json={"username": "requester", "password": "test-password"}
+    )
+    assert relogin.status_code == 401
+
+    users = client.get("/api/users").json()
+    deleted_user = next(user for user in users if user["id"] == profile["id"])
+    assert deleted_user["username"] == f"deleted-{profile['id']}"
+    assert deleted_user["displayName"] == "Deleted Account"
+    assert deleted_user["email"] is None
+    assert deleted_user["phoneNumber"] is None
+    assert deleted_user["isActive"] is False
+
+    work_order = client.get(f"/api/work-orders/{created['id']}").json()
+    assert work_order["createdById"] is None
+    assert work_order["requestedBy"] == "Deleted Account"
+    assert work_order["assignedTo"] is None
+
+
+def test_delete_profile_blocks_only_active_admin(client):
+    response = client.delete("/api/profile")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "You cannot delete the only active Administrator account"
 
 
 def test_requester_can_attach_media_to_new_work_order(client, tmp_path, monkeypatch):

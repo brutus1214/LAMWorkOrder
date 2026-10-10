@@ -99,9 +99,11 @@ class MainWindow(QMainWindow):
         menu.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         profile = QAction("Profile", self)
         profile.triggered.connect(self.edit_profile)
+        delete_account = QAction("Delete Account", self)
+        delete_account.triggered.connect(self.delete_account)
         logout = QAction("Logout", self)
         logout.triggered.connect(self.sign_out)
-        menu.addActions([profile, logout])
+        menu.addActions([profile, delete_account, logout])
         brand.addWidget(menu)
         layout.addLayout(brand)
         self.update_heading()
@@ -283,6 +285,28 @@ class MainWindow(QMainWindow):
 
     def sign_out(self):
         self.client.logout()
+        self.restart_session()
+
+    def delete_account(self):
+        if (
+            QMessageBox.question(
+                self,
+                "Delete Account",
+                "Delete your account? Your profile information will be removed and you will be signed out. Existing work orders stay in the operations history.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            != QMessageBox.StandardButton.Yes
+        ):
+            return
+        try:
+            self.client.delete_account()
+            QMessageBox.information(self, "Account deleted", "Your account has been deleted.")
+            self.restart_session()
+        except Exception as error:
+            QMessageBox.warning(self, "Delete account failed", str(error))
+
+    def restart_session(self):
         self.hide()
         replacement = MainWindow(self.client)
         replacement.show()

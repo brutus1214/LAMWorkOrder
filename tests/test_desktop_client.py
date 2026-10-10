@@ -46,6 +46,38 @@ def test_client_lists_assignees(monkeypatch):
     assert str(request_seen["url"]).endswith("/api/assignees")
 
 
+def test_client_deletes_account_and_clears_session(monkeypatch):
+    request_seen = {}
+
+    def handler(request):
+        request_seen["method"] = request.method
+        request_seen["url"] = str(request.url)
+        request_seen["authorization"] = request.headers.get("Authorization")
+        return httpx.Response(204)
+
+    transport = httpx.MockTransport(handler)
+
+    class TestHttpClient(httpx.Client):
+        def __init__(self, *args, **kwargs):
+            kwargs["transport"] = transport
+            super().__init__(*args, **kwargs)
+
+    monkeypatch.setattr(httpx, "Client", TestHttpClient)
+    client = ApiClient("http://example.test/")
+    client.token = "session-token"
+    client.user = {"username": "requester"}
+
+    client.delete_account()
+
+    assert request_seen == {
+        "method": "DELETE",
+        "url": "http://example.test/api/profile",
+        "authorization": "Bearer session-token",
+    }
+    assert client.token is None
+    assert client.user is None
+
+
 def test_all_filter_only_shows_recent_work_orders():
     now = datetime(2026, 8, 18, 12, tzinfo=UTC)
     orders = [

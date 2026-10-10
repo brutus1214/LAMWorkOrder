@@ -42,6 +42,10 @@ final class APIClient {
         try await send("api/profile", method: "PATCH", token: token, body: request)
     }
 
+    func deleteAccount(token: String) async throws {
+        try await sendNoContent("api/profile", method: "DELETE", token: token)
+    }
+
     func users(token: String) async throws -> [User] {
         try await send("api/users", token: token)
     }
@@ -160,6 +164,13 @@ final class APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.httpBody = try encoder.encode(body)
+        _ = try await data(for: request)
+    }
+
+    private func sendNoContent(_ path: String, method: String, token: String) async throws {
+        var request = URLRequest(url: try makeURL(path: path))
+        request.httpMethod = method
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         _ = try await data(for: request)
     }
 

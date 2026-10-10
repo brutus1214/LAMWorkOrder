@@ -134,7 +134,7 @@ private data class AssignmentSendRequest(
     var selected by remember { mutableStateOf<WorkOrder?>(null) }
     var profile by remember { mutableStateOf(false) }
     var manageUsers by remember { mutableStateOf(false) }
-    if (profile) { Profile(model, state.user!!, { profile = false }); return }
+    if (profile) { Profile(model, state, { profile = false }); return }
     if (manageUsers) { ManageUsers(model, state, { manageUsers = false }); return }
     selected?.let { Detail(model, it, state, { selected = null }); return }
     Queue(model, state, { selected = it }, { profile = true }, { manageUsers = true; model.loadUsers() })
@@ -489,7 +489,63 @@ private fun formatUsPhone(input: String): String {
     }
 }
 
-@Composable private fun Profile(model:WorkOrderViewModel,user:User,back:()->Unit){BackHandler{back()};var name by remember{mutableStateOf(user.displayName)};var email by remember{mutableStateOf(user.email.orEmpty())};Column(Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text("Profile",style=MaterialTheme.typography.headlineLarge);Text("${user.username} · ${user.role}");OutlinedTextField(name,{name=it},label={Text("Display name")});OutlinedTextField(email,{email=it},label={Text("Email")});Button({model.updateProfile(name,email,back)},enabled=name.isNotBlank()){Text("Save")};TextButton(back){Text("Cancel")}}}
+@Composable
+private fun Profile(model: WorkOrderViewModel, state: QueueState, back: () -> Unit) {
+    val user = state.user ?: return
+    var name by remember(user.id) { mutableStateOf(user.displayName) }
+    var email by remember(user.id) { mutableStateOf(user.email.orEmpty()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+
+    BackHandler { back() }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete Account?") },
+            text = {
+                Text("This removes your profile information and signs you out. Existing work orders stay in the operations history.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        model.deleteAccount()
+                    },
+                ) {
+                    Text("Delete Account", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton({ confirmDelete = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    Column(
+        Modifier.fillMaxSize().safeDrawingPadding().padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Profile", style = MaterialTheme.typography.headlineLarge)
+        Text("${user.username} - ${user.role}")
+        OutlinedTextField(name, { name = it }, label = { Text("Display name") })
+        OutlinedTextField(email, { email = it }, label = { Text("Email") })
+        Button(
+            { model.updateProfile(name, email, back) },
+            enabled = name.isNotBlank() && !state.loading,
+        ) {
+            Text("Save")
+        }
+        HorizontalDivider()
+        TextButton(
+            { confirmDelete = true },
+            enabled = !state.loading,
+        ) {
+            Text("Delete Account", color = MaterialTheme.colorScheme.error)
+        }
+        state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        TextButton(back) { Text("Cancel") }
+    }
+}
 
 private fun assigneeOptions(state: QueueState): List<User> =
     (state.assignees + state.users.filter { it.role in assignableRoles })

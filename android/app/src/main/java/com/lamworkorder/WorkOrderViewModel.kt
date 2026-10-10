@@ -102,6 +102,24 @@ class WorkOrderViewModel(private val api: WorkOrderApi = WorkOrderApi.create()) 
             .onFailure { _state.value = _state.value.copy(error = it.message) }
     }
 
+    fun deleteAccount() = viewModelScope.launch {
+        _state.value = _state.value.copy(loading = true, error = null)
+        runCatching {
+            val response = api.deleteAccount(auth())
+            if (!response.isSuccessful) error("Unable to delete account")
+        }
+            .onSuccess {
+                token = null
+                _state.value = QueueState()
+            }
+            .onFailure {
+                _state.value = _state.value.copy(
+                    loading = false,
+                    error = it.message ?: "Unable to delete account",
+                )
+            }
+    }
+
     fun loadUsers() = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null)
         runCatching { api.users(auth()) }

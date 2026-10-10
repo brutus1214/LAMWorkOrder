@@ -6,6 +6,7 @@ struct ProfileView: View {
 
     @State private var displayName = ""
     @State private var email = ""
+    @State private var confirmingDelete = false
 
     var body: some View {
         NavigationView {
@@ -38,6 +39,22 @@ struct ProfileView: View {
                         }
                     }
                 }
+
+                Section(header: Text("Account")) {
+                    Button(role: .destructive) {
+                        confirmingDelete = true
+                    } label: {
+                        Text("Delete Account")
+                    }
+                    .disabled(app.loading)
+                }
+
+                if let error = app.errorMessage {
+                    Section {
+                        Text(error)
+                            .foregroundColor(.red)
+                    }
+                }
             }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
@@ -61,6 +78,18 @@ struct ProfileView: View {
             .onAppear {
                 displayName = app.user?.displayName ?? ""
                 email = app.user?.email ?? ""
+            }
+            .alert("Delete Account?", isPresented: $confirmingDelete) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete Account", role: .destructive) {
+                    Task {
+                        if await app.deleteAccount() {
+                            dismiss()
+                        }
+                    }
+                }
+            } message: {
+                Text("This removes your profile information and signs you out. Existing work orders stay in the operations history.")
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())

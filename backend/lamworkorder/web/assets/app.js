@@ -611,6 +611,24 @@ $("profile-form").addEventListener("submit", async (event) => {
   }
 });
 
+$("delete-account-button").onclick = async () => {
+  if (!confirm("Delete your account? Your profile information will be removed and you will be signed out. Existing work orders stay in the operations history.")) {
+    return;
+  }
+  const button = $("delete-account-button");
+  button.disabled = true;
+  $("profile-error").textContent = "";
+  try {
+    await api("/api/profile", { method: "DELETE" });
+    $("profile-dialog").close();
+    signOut(false);
+  } catch (error) {
+    $("profile-error").textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+};
+
 (async () => {
   if (!token) return;
   try {

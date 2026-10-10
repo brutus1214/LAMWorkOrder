@@ -46,6 +46,11 @@ button.secondary {
   color: inherit;
 }
 
+button.danger {
+  border-color: #a1261c;
+  color: #a1261c;
+}
+
 button:disabled {
   opacity: .5;
 }
@@ -369,6 +374,12 @@ dialog::backdrop {
   justify-content: flex-end;
   gap: .5rem;
   margin-top: 1rem;
+}
+
+.dialog-danger-row {
+  border-top: 1px solid #e4eaf0;
+  margin-top: 1rem;
+  padding-top: 1rem;
 }
 
 .detail-dialog {

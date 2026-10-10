@@ -4,12 +4,12 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from .auth import current_user, hash_password, issue_token, require_roles, verify_password
 from .database import get_session
-from .models import Attachment, SessionToken, User
+from .models import Attachment, SessionToken, User, WorkOrder
 from .repository import WorkOrderRepository
 from .schemas import (
     AttachmentRead,
@@ -209,6 +209,43 @@ def update_profile(
     user.email = request.email.strip() if request.email else None
     session.commit()
     return user
+
+
+@router.delete("/api/profile", status_code=204, tags=["profile"])
+def delete_profile(user: User = Depends(current_user), session: Session = Depends(get_session)):
+    if user.role == "Admin":
+        active_admins = session.scalar(
+            select(func.count())
+            .select_from(User)
+            .where(User.role == "Admin", User.is_active == 1)
+        )
+        if active_admins <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="You cannot delete the only active Administrator account",
+            )
+
+    assignee_labels = user_assignee_labels(user)
+    display_name = normalized_identity(user.display_name)
+    deleted_label = "Deleted Account"
+
+    for item in session.scalars(select(WorkOrder).where(WorkOrder.created_by_id == user.id)):
+        item.created_by_id = None
+        item.requested_by = deleted_label
+
+    for item in session.scalars(select(WorkOrder).where(WorkOrder.assigned_to.is_not(None))):
+        assigned_to = normalized_identity(item.assigned_to)
+        if assigned_to in assignee_labels or without_store_label(assigned_to) == display_name:
+            item.assigned_to = None
+
+    user.username = f"deleted-{user.id}"
+    user.password_hash = hash_password(uuid4().hex)
+    user.display_name = deleted_label
+    user.email = None
+    user.phone_number = None
+    user.is_active = 0
+    session.execute(delete(SessionToken).where(SessionToken.user_id == user.id))
+    session.commit()
 
 
 def _managed_user(user_id: UUID, actor: User, session: Session) -> User:
